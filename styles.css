@@ -24,37 +24,43 @@ body {
 .gradient-bg {
   position: fixed;
   left: 50%;
-  bottom: -100vh; /* start below the viewport */
-  width: 200vw;
-  height: 200vh;
-  transform: translateX(-50%) translateY(100%);
+  bottom: -120vh; /* start well below the viewport */
+  width: 240vw;
+  height: 240vh;
+  transform: translateX(-50%) translateY(60%);
   background: radial-gradient(
-    55% 65% at 50% 50%,
+    140% 180% at 50% 120%,
     var(--c1) 0%,
-    var(--c2) 25%,
-    var(--c3) 50%,
-    var(--c4) 75%,
+    var(--c2) 22%,
+    var(--c3) 46%,
+    var(--c4) 70%,
     var(--c5) 100%
   );
-  filter: blur(120px); /* soft edges */
+  filter: blur(140px); /* soft edges */
   opacity: 0;
   pointer-events: none; /* allow clicks through gradient */
-  animation: riseGradient 5s ease-out forwards;
+  animation: riseGradient 5s cubic-bezier(0.22, 0.61, 0.36, 1) 0.15s forwards;
 }
 
 /* Keyframes for rising and fading in */
 @keyframes riseGradient {
   0% {
-    transform: translateX(-50%) translateY(100%);
+    transform: translateX(-50%) translateY(60%);
     opacity: 0;
   }
 
-  30% {
+  20% {
+    transform: translateX(-50%) translateY(45%);
+    opacity: 0;
+  }
+
+  40% {
+    transform: translateX(-50%) translateY(25%);
     opacity: 1;
   }
 
   100% {
-    transform: translateX(-50%) translateY(0);
+    transform: translateX(-50%) translateY(10%);
     opacity: 1;
   }
 }

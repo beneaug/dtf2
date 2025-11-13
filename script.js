@@ -1,11 +1,5 @@
-// Wait for the CSS animation to finish and then remove it
-// so the gradient stays put without an active animation.
-const gradient = document.querySelector('.gradient-bg');
+// No JavaScript is required for the gradient effect.
+// The CSS animation uses `forwards` to keep the final state.
 
-if (gradient) {
-  gradient.addEventListener('animationend', () => {
-    gradient.style.animation = 'none';
-  });
-}
 
 
