@@ -20,16 +20,16 @@ body {
 
   40% {
     opacity: 1;
-    bottom: -25vh;
+    bottom: -45vh;
   }
 
   70% {
-    bottom: -12vh;
+    bottom: -34vh;
   }
 
   100% {
     opacity: 1;
-    bottom: -18vh;
+    bottom: -38vh;
   }
 }
 
@@ -37,20 +37,12 @@ body {
   position: absolute;
   left: 50%;
   bottom: -120vh;
-  width: 260%;
+  width: 200%;
   aspect-ratio: 1 / 1;
   transform: translateX(-50%);
-  filter: blur(110px);
+  filter: blur(120px);
   will-change: transform, opacity;
-  /* Temporarily disable masking for Safari reliability; can be re-added once confirmed */
-  /* -webkit-mask-image: linear-gradient(
-   *   to bottom,
-   *   transparent 0%,
-   *   black 5%,
-   *   black 100%
-   * );
-   * mask-image: linear-gradient(to bottom, transparent 0%, black 5%, black 100%);
-   */
+  mix-blend-mode: screen;
   animation: thermal-rise 2.4s cubic-bezier(0.22, 0.61, 0.21, 1) forwards;
 }
 
