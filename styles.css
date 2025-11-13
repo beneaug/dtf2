@@ -1,0 +1,120 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    -apple-system, sans-serif;
+  background: #050507;
+  color: #f9fafb;
+}
+
+.thermal-page {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% -20%, #111827 0, #020308 55%);
+}
+
+/* Grainy overlay (dark grey noise) */
+.thermal-grain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.7;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='3' stitchTiles='noStitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.38'/%3E%3C/svg%3E");
+  background-size: 120px 120px;
+}
+
+/* The big thermal gradient “sun” */
+.thermal-gradient {
+  position: absolute;
+  left: 50%;
+  top: 100%; /* start off-screen */
+  width: 350%;
+  aspect-ratio: 1 / 1;
+  transform: translate(-50%, 50vh);
+  opacity: 0;
+  filter: blur(24px);
+  will-change: transform, opacity;
+
+  /* thermal imaging palette */
+  background:
+    radial-gradient(
+      circle at 50% 15%,
+      #fff4b3 0,
+      #ffe066 10%,
+      #ffba08 22%,
+      #ff7b00 35%,
+      #ff006e 50%,
+      #d40078 63%,
+      #7b2cbf 78%,
+      #240046 100%
+    );
+
+  /* fade at top like lovable */
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 5%,
+    black 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 5%,
+    black 100%
+  );
+
+  animation: thermal-rise 2.4s cubic-bezier(0.22, 0.61, 0.21, 1) forwards;
+}
+
+/* Hero content */
+.thermal-content {
+  position: relative;
+  z-index: 10;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 4rem 1.5rem 6rem;
+}
+
+.thermal-content h1 {
+  font-size: clamp(2.5rem, 5vw, 3.75rem);
+  letter-spacing: -0.04em;
+  margin-bottom: 0.75rem;
+}
+
+.thermal-content p {
+  max-width: 32rem;
+  font-size: 1.0625rem;
+  color: rgba(249, 250, 251, 0.8);
+}
+
+/* “sunset rise then settle” motion */
+@keyframes thermal-rise {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 60vh);
+  }
+  40% {
+    opacity: 1;
+    transform: translate(-50%, 10vh); /* overshoot upward */
+  }
+  70% {
+    transform: translate(-50%, 0); /* settle to mid */
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 5vh); /* final resting slightly low */
+  }
+}
+
+
