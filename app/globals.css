@@ -15,40 +15,42 @@ body {
 @keyframes thermal-rise {
   0% {
     opacity: 0;
-    transform: translate(-50%, 80vh);
+    bottom: -80vh;
   }
 
   40% {
     opacity: 1;
-    transform: translate(-50%, 10vh);
+    bottom: -10vh;
   }
 
   70% {
-    transform: translate(-50%, 0);
+    bottom: -2vh;
   }
 
   100% {
     opacity: 1;
-    transform: translate(-50%, 5vh);
+    bottom: -5vh;
   }
 }
 
 .thermal-blob {
   position: absolute;
   left: 50%;
-  top: 100%;
+  bottom: -80vh;
   width: 350%;
   aspect-ratio: 1 / 1;
-  transform: translate(-50%, 80vh);
+  transform: translateX(-50%);
   filter: blur(70px);
   will-change: transform, opacity;
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0%,
-    black 5%,
-    black 100%
-  );
-  mask-image: linear-gradient(to bottom, transparent 0%, black 5%, black 100%);
+  /* Temporarily disable masking for Safari reliability; can be re-added once confirmed */
+  /* -webkit-mask-image: linear-gradient(
+   *   to bottom,
+   *   transparent 0%,
+   *   black 5%,
+   *   black 100%
+   * );
+   * mask-image: linear-gradient(to bottom, transparent 0%, black 5%, black 100%);
+   */
   animation: thermal-rise 2.4s cubic-bezier(0.22, 0.61, 0.21, 1) forwards;
 }
 
