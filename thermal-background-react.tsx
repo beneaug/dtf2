@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * Thermal Sunrise Background Component
  * 
@@ -15,11 +17,6 @@
  *     </ThermalBackground>
  *   )
  * }
- * ```
- * 
- * Make sure to import the CSS file in your app:
- * ```tsx
- * import './thermal-background-tailwind.css'
  * ```
  */
 
@@ -46,9 +43,8 @@ export default function ThermalBackground({
       
       {/* Rising thermal gradient */}
       <div 
-        className="absolute left-1/2 top-full w-[350%] aspect-square -translate-x-1/2 opacity-0 blur-2xl will-change-transform animate-thermal-rise"
+        className="absolute left-1/2 w-[350%] aspect-square blur-2xl will-change-transform animate-thermal-rise"
         style={{
-          transform: 'translate(-50%, 50vh)',
           background: `
             radial-gradient(circle at 50% 15%,
               #fff4b3 0,
