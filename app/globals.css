@@ -12,4 +12,29 @@ body {
   color: rgb(248 250 252);
 }
 
+@keyframes thermal-rise {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 60vh);
+  }
+
+  40% {
+    opacity: 1;
+    transform: translate(-50%, 10vh);
+  }
+
+  70% {
+    transform: translate(-50%, 0);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 5vh);
+  }
+}
+
+.thermal-blob {
+  animation: thermal-rise 2.4s cubic-bezier(0.22, 0.61, 0.21, 1) forwards;
+}
+
 
