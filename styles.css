@@ -6,149 +6,103 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    background-color: #1a1a1a;
-    color: #ffffff;
-    overflow-x: hidden;
-    position: relative;
-    min-height: 100vh;
-}
-
-/* Grain overlay for texture - subtle overall grain */
-.grain-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.5'/%3E%3C/svg%3E");
-    background-size: 200% 200%;
-    opacity: 0.12;
-    pointer-events: none;
-    z-index: 2;
-    mix-blend-mode: overlay;
-    animation: grain-shift 8s linear infinite;
-}
-
-@keyframes grain-shift {
-    0%, 100% {
-        background-position: 0 0;
-    }
-    50% {
-        background-position: 100% 100%;
-    }
-}
-
-/* Container for the animated gradient */
-.gradient-container {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
     overflow: hidden;
-    z-index: 1;
+    height: 100vh;
+    width: 100vw;
+    position: relative;
 }
 
-/* Animated gradient that rises like a sunset */
-.gradient-animation {
-    position: absolute;
-    width: 100%;
-    height: 150%;
-    
-    /* Layered backgrounds: grain texture + gradient */
-    background-image: 
-        /* SVG noise for grain texture */
-        url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.2'/%3E%3C/svg%3E"),
-        /* Crosshatch grain pattern */
-        repeating-linear-gradient(
-            0deg,
-            rgba(0, 0, 0, 0.02) 0px,
-            transparent 1px,
-            transparent 2px,
-            rgba(0, 0, 0, 0.02) 3px
-        ),
-        repeating-linear-gradient(
-            90deg,
-            rgba(0, 0, 0, 0.02) 0px,
-            transparent 1px,
-            transparent 2px,
-            rgba(0, 0, 0, 0.02) 3px
-        ),
-        /* Main gradient - sunset colors: orange/pink transitioning to blue/purple */
-        radial-gradient(
-            ellipse 120% 80% at center bottom,
-            rgba(255, 140, 0, 0.3) 0%,
-            rgba(255, 20, 147, 0.35) 20%,
-            rgba(75, 0, 130, 0.3) 45%,
-            rgba(25, 25, 112, 0.25) 70%,
-            rgba(26, 26, 26, 0) 100%
-        );
-    
-    background-size: 
-        200% 200%,  /* Grain texture - larger for subtlety */
-        100% 100%,  /* Horizontal grain lines */
-        100% 100%,  /* Vertical grain lines */
-        100% 100%;  /* Main gradient */
-    
-    background-position: 
-        0 0,        /* Grain texture */
-        0 0,        /* Horizontal grain */
-        0 0,        /* Vertical grain */
-        center bottom;  /* Main gradient */
-    
-    /* Start position - below the viewport */
-    bottom: -100%;
+.background-container {
+    position: fixed;
+    top: 0;
     left: 0;
-    
-    /* Animation: rise up and settle in lower half */
-    animation: sunset-rise 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    background: #0a0a0a;
 }
 
-@keyframes sunset-rise {
+.grain-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.12;
+    mix-blend-mode: overlay;
+    pointer-events: none;
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
+}
+
+.gradient-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: 
+        linear-gradient(
+            to bottom,
+            rgba(10, 10, 15, 0) 0%,
+            rgba(15, 12, 20, 0.15) 20%,
+            rgba(25, 18, 35, 0.3) 35%,
+            rgba(40, 25, 55, 0.45) 50%,
+            rgba(65, 35, 85, 0.6) 65%,
+            rgba(95, 50, 120, 0.75) 80%,
+            rgba(120, 65, 150, 0.85) 95%,
+            rgba(140, 75, 170, 0.9) 100%
+        ),
+        linear-gradient(
+            to right,
+            rgba(20, 25, 50, 0.3) 0%,
+            rgba(40, 30, 70, 0.4) 50%,
+            rgba(80, 50, 100, 0.5) 100%
+        );
+    transform: translateY(100%);
+    animation: gradientRise 6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    pointer-events: none;
+    will-change: transform;
+}
+
+@keyframes gradientRise {
     0% {
-        bottom: -100%;
-        opacity: 0;
-        transform: scaleY(0.8);
-    }
-    60% {
-        opacity: 1;
+        transform: translateY(100%);
     }
     100% {
-        bottom: -50%;
-        opacity: 1;
-        transform: scaleY(1);
+        transform: translateY(0%);
     }
 }
 
-/* Content layer */
 .content {
     position: relative;
-    z-index: 3;
-    padding: 4rem 2rem;
-    text-align: center;
-    min-height: 100vh;
+    z-index: 1;
     display: flex;
     flex-direction: column;
-    justify-content: center;
     align-items: center;
+    justify-content: center;
+    height: 100vh;
+    text-align: center;
+    padding: 2rem;
 }
 
-.content h1 {
-    font-size: 3rem;
+.title {
+    font-size: clamp(3rem, 8vw, 6rem);
     font-weight: 700;
+    color: #ffffff;
     margin-bottom: 1rem;
-    opacity: 0;
-    animation: fade-in 1s ease-out 0.5s forwards;
+    letter-spacing: -0.02em;
+    animation: fadeInUp 1.5s ease-out 0.5s both;
 }
 
-.content p {
-    font-size: 1.25rem;
-    opacity: 0.8;
-    opacity: 0;
-    animation: fade-in 1s ease-out 0.8s forwards;
+.subtitle {
+    font-size: clamp(1.25rem, 3vw, 1.75rem);
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 400;
+    animation: fadeInUp 1.5s ease-out 0.7s both;
 }
 
-@keyframes fade-in {
+@keyframes fadeInUp {
     from {
         opacity: 0;
         transform: translateY(20px);
@@ -158,4 +112,3 @@ body {
         transform: translateY(0);
     }
 }
-
