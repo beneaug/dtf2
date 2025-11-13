@@ -1,54 +1,44 @@
-# Thermal Gradient Background
+# Thermal Sunrise Background
 
-Recreation of Lovable.dev's rising grainy gradient effect with a thermal-imaging palette.
+A Lovable-inspired rising grainy gradient effect with a thermal-imaging palette.
 
 ## Files
 
-### Standalone Version
-- **`thermal-standalone.html`** - Drop-in HTML file with embedded CSS. Open in a browser to see the effect immediately.
+### 1. `thermal-background.html`
+**Drop-in HTML/CSS** - Standalone file you can open directly in a browser for quick experiments.
 
-### React + Tailwind Version (Next.js)
-- **`components/ThermalHeroBackground.tsx`** - Reusable React component
-- **`app/page.tsx`** - Example usage in Next.js App Router
-- **`tailwind.config.js`** - Tailwind configuration with custom animation and background
+### 2. `thermal-background-react.tsx`
+**React + Tailwind version** - Component ready to use in your React app.
 
-## Features
-
-- Dark, grainy background at load
-- Huge blurred thermal gradient that rises from the bottom like a sunset
-- Gradient settles in the lower half of the screen
-- Top edge masked to softly fade into the dark background
-- Thermal color palette: yellow → orange → hot pink → purple → deep navy
+### 3. `thermal-background-tailwind.css`
+**Additional CSS** - Keyframes and utilities for Tailwind integration.
 
 ## Usage
 
-### Standalone
-Simply open `thermal-standalone.html` in your browser.
+### HTML Version
+Simply open `thermal-background.html` in your browser.
 
-### Next.js
-1. Ensure you have Tailwind CSS configured
-2. Copy `components/ThermalHeroBackground.tsx` to your components folder
-3. Add the Tailwind config extensions to your `tailwind.config.js`
-4. Use the component in your pages:
-
+### React Version
 ```tsx
-import { ThermalHeroBackground } from "@/components/ThermalHeroBackground";
+import ThermalBackground from './thermal-background-react'
 
-export default function HomePage() {
+function App() {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#050507] text-slate-50">
-      <ThermalHeroBackground />
-      {/* Your content here */}
-    </div>
-  );
+    <ThermalBackground>
+      <h1>Your content here</h1>
+    </ThermalBackground>
+  )
 }
 ```
 
-## Animation Details
+## Features
 
-The gradient animates with:
-- Initial position: `translate(-50%, 60vh)` with `opacity: 0`
-- Overshoots to `translate(-50%, 10vh)` at 40%
-- Settles to `translate(-50%, 5vh)` at 100%
-- Duration: 2.4s with cubic-bezier easing `(0.22, 0.61, 0.21, 1)`
+- 🌡️ Thermal-imaging color palette (yellow → orange → pink → purple)
+- 🌾 Grainy overlay texture
+- ☀️ Rising gradient animation (sunset effect)
+- 🎨 Soft fade at top edge (like Lovable)
+- ⚡ Smooth cubic-bezier animation
 
+## Customization
+
+Adjust the thermal colors in the `background` gradient, or modify the animation timing in the `@keyframes thermal-rise` rule.

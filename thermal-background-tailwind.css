@@ -1,0 +1,32 @@
+/**
+ * Tailwind CSS for Thermal Background
+ * 
+ * Import this file in your main app file:
+ * ```tsx
+ * import './thermal-background-tailwind.css'
+ * ```
+ * 
+ * Or add to your global CSS file.
+ */
+
+@keyframes thermal-rise {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 60vh);
+  }
+  40% {
+    opacity: 1;
+    transform: translate(-50%, 10vh);
+  }
+  70% {
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 5vh);
+  }
+}
+
+.animate-thermal-rise {
+  animation: thermal-rise 2.4s cubic-bezier(0.22, 0.61, 0.21, 1) forwards;
+}

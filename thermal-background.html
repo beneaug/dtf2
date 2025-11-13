@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Thermal Gradient - Standalone</title>
+  <title>Thermal Sunrise Background</title>
   <style>
     *,
     *::before,
@@ -48,7 +48,6 @@
       opacity: 0;
       filter: blur(24px);
       will-change: transform, opacity;
-
       /* thermal imaging palette */
       background:
         radial-gradient(circle at 50% 15%,
@@ -61,7 +60,6 @@
           #7b2cbf 78%,
           #240046 100%
         );
-
       /* fade at top like lovable */
       -webkit-mask-image: linear-gradient(
         to bottom,
@@ -75,7 +73,6 @@
         black 5%,
         black 100%
       );
-
       animation: thermal-rise 2.4s cubic-bezier(0.22, 0.61, 0.21, 1) forwards;
     }
 
@@ -110,28 +107,21 @@
         transform: translate(-50%, 5vh); /* final resting slightly low */
       }
     }
-
-    @media (min-width: 768px) {
-      .thermal-gradient {
-        width: 190%;
-      }
-    }
   </style>
 </head>
 <body>
   <div class="thermal-page">
     <!-- Grain overlay -->
     <div class="thermal-grain"></div>
-
+    
     <!-- Rising gradient -->
     <div class="thermal-gradient"></div>
-
+    
     <!-- Your content goes above the gradient -->
     <main class="thermal-content">
-      <h1>Build something <span style="color: #ffba08;">Thermal</span></h1>
+      <h1>Build something Thermal</h1>
       <p>Create apps and websites with a spicy IR glow.</p>
     </main>
   </div>
 </body>
 </html>
-
