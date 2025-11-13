@@ -363,10 +363,6 @@ img, video {
   background-color: rgb(5 5 7 / var(--tw-bg-opacity, 1));
 }
 
-.bg-\[radial-gradient\(circle_at_50\%_15\%\,\#fff4b3_0\,\#ffe066_10\%\,\#ffba08_22\%\,\#ff7b00_35\%\,\#ff006e_50\%\,\#d40078_63\%\,\#7b2cbf_78\%\,\#240046_100\%\)\] {
-  background-image: radial-gradient(circle at 50% 15%, #fff4b3 0, #ffe066 10%, #ffba08 22%, #ff7b00 35%, #ff006e 50%, #d40078 63%, #7b2cbf 78%, #240046 100%);
-}
-
 .bg-radial-hero {
   background-image: radial-gradient(circle_at_50% _-20% , #111827 0, #020308 55%);
 }
