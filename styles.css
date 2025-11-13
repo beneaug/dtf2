@@ -1,0 +1,62 @@
+/* Define colours based on Lovable’s variables */
+:root {
+  /* Dark grey background from --background:0 0% 11% */
+  --bg-color: hsl(0, 0%, 11%);
+
+  /* Colours from Lovable’s chart palette */
+  --c1: hsl(220, 70%, 50%);   /* vivid blue */
+  --c2: hsl(340, 75%, 55%);   /* magenta/pink */
+  --c3: hsl(30, 80%, 55%);    /* orange */
+  --c4: hsl(280, 65%, 60%);   /* purple */
+  --c5: hsl(160, 60%, 45%);   /* teal */
+}
+
+/* Reset margins and hide scrollbars */
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background-color: var(--bg-color);
+}
+
+/* Container for the animated gradient */
+.gradient-bg {
+  position: fixed;
+  left: 50%;
+  bottom: -100vh; /* start below the viewport */
+  width: 200vw;
+  height: 200vh;
+  transform: translateX(-50%) translateY(100%);
+  background: radial-gradient(
+    55% 65% at 50% 50%,
+    var(--c1) 0%,
+    var(--c2) 25%,
+    var(--c3) 50%,
+    var(--c4) 75%,
+    var(--c5) 100%
+  );
+  filter: blur(120px); /* soft edges */
+  opacity: 0;
+  pointer-events: none; /* allow clicks through gradient */
+  animation: riseGradient 5s ease-out forwards;
+}
+
+/* Keyframes for rising and fading in */
+@keyframes riseGradient {
+  0% {
+    transform: translateX(-50%) translateY(100%);
+    opacity: 0;
+  }
+
+  30% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+}
+
+
