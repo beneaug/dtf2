@@ -102,8 +102,17 @@ class GrainEffect {
 
 // Initialize effects when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize grain effect
     const canvas = document.getElementById('grainCanvas');
     if (canvas) {
         new GrainEffect(canvas);
     }
+    
+    // Initialize thermal gradient animation
+    window.addEventListener('load', () => {
+        const layer = document.querySelector('.thermal-gradient-layer');
+        if (layer) {
+            layer.classList.add('is-visible');
+        }
+    });
 });
