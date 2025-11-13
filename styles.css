@@ -24,19 +24,33 @@ body {
 .gradient-bg {
   position: fixed;
   left: 50%;
-  bottom: -120vh; /* start well below the viewport */
-  width: 240vw;
-  height: 240vh;
-  transform: translateX(-50%) translateY(60%);
-  background: radial-gradient(
-    140% 180% at 50% 120%,
-    var(--c1) 0%,
-    var(--c2) 22%,
-    var(--c3) 46%,
-    var(--c4) 70%,
-    var(--c5) 100%
-  );
-  filter: blur(140px); /* soft edges */
+  bottom: -90vh; /* start well below the viewport */
+  width: 220vw;
+  height: 200vh;
+  transform: translateX(-50%) translateY(55%);
+  /* Layered radials to better match Lovable's "sunrise" blob */
+  background:
+    /* Warm core at the bottom center */
+    radial-gradient(
+      110% 80% at 50% 120%,
+      var(--c3) 0%,
+      var(--c2) 35%,
+      transparent 70%
+    ),
+    /* Blue halo above the core */
+    radial-gradient(
+      130% 100% at 50% 80%,
+      var(--c1) 0%,
+      transparent 65%
+    ),
+    /* Subtle purple/teal outer glow */
+    radial-gradient(
+      160% 140% at 50% 120%,
+      var(--c4) 0%,
+      var(--c5) 35%,
+      transparent 85%
+    );
+  filter: blur(160px); /* soft edges */
   opacity: 0;
   pointer-events: none; /* allow clicks through gradient */
   animation: riseGradient 5s cubic-bezier(0.22, 0.61, 0.36, 1) 0.15s forwards;
@@ -45,7 +59,7 @@ body {
 /* Keyframes for rising and fading in */
 @keyframes riseGradient {
   0% {
-    transform: translateX(-50%) translateY(60%);
+    transform: translateX(-50%) translateY(55%);
     opacity: 0;
   }
 
@@ -60,7 +74,8 @@ body {
   }
 
   100% {
-    transform: translateX(-50%) translateY(10%);
+    /* Final position: blob fully immerses bottom, bulbous into lower half */
+    transform: translateX(-50%) translateY(5%);
     opacity: 1;
   }
 }
