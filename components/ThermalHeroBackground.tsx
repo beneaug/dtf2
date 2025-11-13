@@ -27,10 +27,10 @@ export function ThermalHeroBackground() {
 
       {/* Rising thermal gradient */}
       <div
-        className="thermal-blob absolute left-1/2 top-full aspect-square w-[350%] -translate-x-1/2 blur-3xl will-change-transform will-change-opacity md:w-[190%] [mask-image:linear-gradient(to_bottom,transparent_0%,black_5%,black_100%)] [-webkit-mask-image:linear-gradient(to_bottom,transparent_0%,black_5%,black_100%)]"
         style={{
           backgroundImage: BLOB_BG,
         }}
+        className="thermal-blob"
       />
     </div>
   );
