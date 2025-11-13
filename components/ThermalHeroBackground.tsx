@@ -5,7 +5,7 @@ const HERO_BG =
   "radial-gradient(circle at 50% -20%, #111827 0, #020308 55%)";
 
 const BLOB_BG =
-  "radial-gradient(circle at 50% 15%, #fff4b3 0, #ffe066 10%, #ffba08 22%, #ff7b00 35%, #ff006e 50%, #d40078 63%, #7b2cbf 78%, #240046 100%)";
+  "radial-gradient(circle at 50% 80%, #fff4b3 0, #ffe066 10%, #ffba08 22%, #ff7b00 35%, #ff006e 50%, #d40078 63%, #7b2cbf 78%, #020308 100%)";
 
 export function ThermalHeroBackground() {
   return (

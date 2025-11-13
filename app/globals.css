@@ -15,32 +15,32 @@ body {
 @keyframes thermal-rise {
   0% {
     opacity: 0;
-    bottom: -80vh;
+    bottom: -120vh;
   }
 
   40% {
     opacity: 1;
-    bottom: -10vh;
+    bottom: -25vh;
   }
 
   70% {
-    bottom: -2vh;
+    bottom: -12vh;
   }
 
   100% {
     opacity: 1;
-    bottom: -5vh;
+    bottom: -18vh;
   }
 }
 
 .thermal-blob {
   position: absolute;
   left: 50%;
-  bottom: -80vh;
-  width: 350%;
+  bottom: -120vh;
+  width: 260%;
   aspect-ratio: 1 / 1;
   transform: translateX(-50%);
-  filter: blur(70px);
+  filter: blur(110px);
   will-change: transform, opacity;
   /* Temporarily disable masking for Safari reliability; can be re-added once confirmed */
   /* -webkit-mask-image: linear-gradient(
