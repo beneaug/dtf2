@@ -341,6 +341,34 @@ body {
   display: none;
 }
 
+.order-upload-preview {
+  margin-top: 1.4rem;
+  border-radius: 0.9rem;
+  background: rgba(5, 6, 8, 0.9);
+  padding: 0.75rem;
+  min-height: 120px;
+  display: none; /* toggled on when a file is present */
+  align-items: center;
+  justify-content: center;
+}
+
+.order-upload-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 260px;
+}
+
+.order-upload-preview--visible {
+  display: flex;
+}
+
+.order-upload-preview-fallback {
+  font-size: 0.85rem;
+  color: #d0d0d0;
+  text-align: center;
+  word-break: break-all;
+}
+
 .order-upload-meta {
   margin: 0.9rem 0 0;
   font-size: 0.78rem;

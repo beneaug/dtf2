@@ -7,6 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const incBtn = form.querySelectorAll(".order-qty-btn")[1];
   const statusEl = form.querySelector(".order-status");
   const uploadInput = form.querySelector(".order-upload-input");
+  const previewEl = form.querySelector(".order-upload-preview");
   const tabs = Array.from(form
     .closest(".order-card")
     .querySelectorAll(".order-tab"));
@@ -39,6 +40,35 @@ document.addEventListener("DOMContentLoaded", () => {
 
     qtyInput.addEventListener("blur", () => {
       qtyInput.value = clampQuantity(qtyInput.value);
+    });
+  }
+
+  // Artwork preview in the upload area
+  if (uploadInput && previewEl) {
+    uploadInput.addEventListener("change", () => {
+      const file = uploadInput.files && uploadInput.files[0];
+      previewEl.innerHTML = "";
+      previewEl.classList.remove("order-upload-preview--visible");
+
+      if (!file) return;
+
+      if (file.type && file.type.startsWith("image/")) {
+        const img = document.createElement("img");
+        img.alt = file.name;
+        img.src = URL.createObjectURL(file);
+        img.onload = () => {
+          // Release memory once the image is loaded
+          URL.revokeObjectURL(img.src);
+        };
+        previewEl.appendChild(img);
+      } else {
+        const fallback = document.createElement("div");
+        fallback.className = "order-upload-preview-fallback";
+        fallback.textContent = file.name;
+        previewEl.appendChild(fallback);
+      }
+
+      previewEl.classList.add("order-upload-preview--visible");
     });
   }
 
