@@ -354,8 +354,8 @@ body {
 
 .order-upload-preview img {
   display: block;
-  max-width: 100%;
-  max-height: 260px;
+  max-width: none; /* sizing controlled via JS for 1:1 feel */
+  max-height: none;
 }
 
 .order-upload-preview--visible {
@@ -367,6 +367,19 @@ body {
   color: #d0d0d0;
   text-align: center;
   word-break: break-all;
+}
+
+.order-status {
+  margin-top: 0.75rem;
+  font-size: 0.82rem;
+}
+
+.order-status--success {
+  color: #9ef7c5;
+}
+
+.order-status--error {
+  color: #ffb8b8;
 }
 
 .order-upload-meta {

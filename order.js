@@ -10,6 +10,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const uploadInput = card.querySelector(".order-upload-input");
   const previewEl = card.querySelector(".order-upload-preview");
   const tabs = Array.from(card.querySelectorAll(".order-tab"));
+  const sizeSelect = form.querySelector('select[name="size"]');
 
   // Configurable endpoint so you can point this at your real backend later.
   const ORDERS_ENDPOINT =
@@ -43,6 +44,30 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Artwork preview in the upload area
+  function applyPreviewSizing() {
+    if (!previewEl) return;
+    const img = previewEl.querySelector("img");
+    if (!img) return;
+
+    const label = (sizeSelect && sizeSelect.value) || '2" x 2"';
+    // Map size labels to a base pixel dimension so sizes feel 1:1 relative.
+    const baseSideMap = {
+      '2" x 2"': 80,
+      '4" x 4"': 140,
+      '6" x 6"': 200,
+      "Custom sheet": 220,
+    };
+    const baseSide = baseSideMap[label] || 120;
+
+    const naturalW = img.naturalWidth || baseSide;
+    const naturalH = img.naturalHeight || baseSide;
+    const maxSide = Math.max(naturalW, naturalH);
+    const scale = baseSide / maxSide;
+
+    img.style.width = `${naturalW * scale}px`;
+    img.style.height = `${naturalH * scale}px`;
+  }
+
   if (uploadInput && previewEl) {
     uploadInput.addEventListener("change", () => {
       const file = uploadInput.files && uploadInput.files[0];
@@ -56,6 +81,7 @@ document.addEventListener("DOMContentLoaded", () => {
         img.alt = file.name;
         img.src = URL.createObjectURL(file);
         img.onload = () => {
+          applyPreviewSizing();
           // Release memory once the image is loaded
           URL.revokeObjectURL(img.src);
         };
@@ -69,6 +95,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
       previewEl.classList.add("order-upload-preview--visible");
     });
+
+    if (sizeSelect) {
+      sizeSelect.addEventListener("change", () => {
+        applyPreviewSizing();
+      });
+    }
   }
 
   // Mode tabs – just cosmetic for now, but we record the choice.
