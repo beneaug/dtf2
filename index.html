@@ -1,40 +1,88 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dancing Gradient Heat Diffusion</title>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Lovable Gradient Background</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body class="grainy-bg">
-    <main class="hero">
-      <div class="heat-blob" aria-hidden="true"></div>
-      <div class="hero-inner">
-        <p class="eyebrow">Experimental visual</p>
-        <h1>Dancing gradient diffusion</h1>
-        <p class="subtitle">
-          A high-end, cinematic background combining heat diffusion color flows
-          with a fine film grain overlay.
-        </p>
+  <body>
+    <div class="page-root">
+      <!-- Scraped background wrapper from lovable.dev (structure preserved) -->
+      <div class="bg-gradient-root">
+        <div class="bg-gradient-wrapper">
+          <div class="bg-gradient-image"></div>
+        </div>
+        <div class="bg-grain-overlay"></div>
       </div>
-    </main>
 
+      <!-- Foreground content -->
+      <main class="page-content">
+        <section class="hero">
+          <h1>Finally. DTF you're gonna love.</h1>
+          <p>Organized and orchestrated by 12ozCollective.</p>
+        </section>
+
+        <section class="copy-section">
+          <h2>Turn heat into stories worth wearing</h2>
+          <p>
+            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aliquam
+            laoreet, arcu ut iaculis pulvinar, ligula nisl convallis nibh, vel
+            pharetra est mauris id libero. Praesent a justo ac lorem aliquet
+            malesuada at vel justo.
+          </p>
+        </section>
+
+        <section class="copy-section">
+          <h2>Dialed workflows for every drop</h2>
+          <p>
+            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
+            porttitor turpis ac nibh tempor, at lacinia eros placerat. Sed
+            hendrerit accumsan augue, eu vestibulum erat bibendum vitae.
+          </p>
+          <p>
+            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Cras at
+            odio quis urna viverra gravida sit amet in urna.
+          </p>
+        </section>
+
+        <section class="copy-section copy-section--last">
+          <h2>Built for shops that never sleep</h2>
+          <p>
+            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Maecenas
+            luctus, lorem a commodo hendrerit, justo nisl consequat lectus, at
+            tincidunt nisl ante eget nisl. Suspendisse tempor, neque a
+            ullamcorper vulputate, velit lorem cursus urna, vitae gravida sem
+            arcu vel velit.
+          </p>
+        </section>
+      </main>
+    </div>
     <script>
-      const blob = document.querySelector(".heat-blob");
+      (function () {
+        var image = document.querySelector(".bg-gradient-image");
+        if (!image) return;
 
-      if (blob) {
-        window.addEventListener("pointermove", (event) => {
-          const { innerWidth, innerHeight } = window;
-          const xNorm = event.clientX / innerWidth - 0.5;
-          const yNorm = event.clientY / innerHeight - 0.5;
+        var maxOffset = 80; // px
+        var factor = -0.08; // negative so background drifts up slightly on scroll
 
-          const xOffset = xNorm * 40; // horizontal sway in px
-          const yOffset = yNorm * 24; // vertical sway in px
+        function onScroll() {
+          var scrollY = window.scrollY || window.pageYOffset || 0;
+          var offset = scrollY * factor;
 
-          blob.style.setProperty("--blob-x", `${xOffset}px`);
-          blob.style.setProperty("--blob-y", `${yOffset}px`);
-        });
-      }
+          if (offset > maxOffset) offset = maxOffset;
+          if (offset < -maxOffset) offset = -maxOffset;
+
+          image.style.transform =
+            "translate3d(-50%, " + offset.toFixed(2) + "px, 0)";
+        }
+
+        window.addEventListener("scroll", onScroll, { passive: true });
+        onScroll();
+      })();
     </script>
   </body>
 </html>
