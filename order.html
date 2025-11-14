@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Order DTF Transfers</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="order-body">
+    <main class="order-page">
+      <header class="order-hero">
+        <h1>Order DTF transfers</h1>
+        <p>
+          Upload your art, set your specs, and send it to 12ozCollective for a
+          perfectly tuned DTF run. This flow is a prototype – nothing is
+          actually submitted yet.
+        </p>
+      </header>
+
+      <section class="order-shell">
+        <div class="order-card">
+          <div class="order-tabs" role="tablist">
+            <button class="order-tab order-tab--active" type="button">
+              Single image
+            </button>
+            <button class="order-tab" type="button">Build sheet</button>
+            <button class="order-tab" type="button">Upload sheet</button>
+          </div>
+
+          <div class="order-upload">
+            <label class="order-upload-drop">
+              <span class="order-upload-icon">⬆︎</span>
+              <span class="order-upload-title">Upload artwork</span>
+              <span class="order-upload-sub">
+                Drag &amp; drop a file here, or click to browse.
+              </span>
+              <input
+                class="order-upload-input"
+                type="file"
+                accept=".jpg,.jpeg,.png,.gif,.bmp,.eps,.pdf,.ai,.svg,.psd,.tif,.tiff"
+              />
+            </label>
+            <p class="order-upload-meta">
+              Supports: JPG, PNG, GIF, BMP, EPS, PDF, AI, SVG, PSD, TIF, TIFF
+            </p>
+          </div>
+
+          <form class="order-form" action="#" method="post">
+            <div class="order-grid">
+              <label class="order-field">
+                <span class="order-field-label">Size</span>
+                <select class="order-input order-select">
+                  <option>2" x 2"</option>
+                  <option>4" x 4"</option>
+                  <option>6" x 6"</option>
+                  <option>Custom sheet</option>
+                </select>
+              </label>
+
+              <label class="order-field">
+                <span class="order-field-label">Quantity</span>
+                <div class="order-qty">
+                  <button class="order-qty-btn" type="button">−</button>
+                  <input
+                    class="order-qty-input"
+                    type="number"
+                    min="1"
+                    value="1"
+                  />
+                  <button class="order-qty-btn" type="button">+</button>
+                </div>
+                <span class="order-price-note">$1.00 per transfer (demo)</span>
+              </label>
+            </div>
+
+            <div class="order-grid order-grid--stack">
+              <label class="order-field">
+                <span class="order-field-label">Transfer name</span>
+                <input
+                  class="order-input"
+                  type="text"
+                  placeholder="Name this transfer run"
+                />
+              </label>
+
+              <label class="order-field">
+                <span class="order-field-label">Garment color</span>
+                <select class="order-input order-select">
+                  <option value="">Choose your fabric color</option>
+                  <option>Light / white</option>
+                  <option>Mid-tone</option>
+                  <option>Dark / black</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="order-field">
+              <span class="order-field-label">Notes for 12ozCollective</span>
+              <textarea
+                class="order-input order-textarea"
+                rows="3"
+                placeholder="Tell us anything important about inks, surfaces, or deadlines."
+              ></textarea>
+            </label>
+
+            <div class="order-actions">
+              <button class="order-primary-btn" type="submit">
+                Add to cart (demo)
+              </button>
+              <span class="order-disclaimer">
+                This is a proof-of-concept checkout – no payment or files are
+                actually sent.
+              </span>
+            </div>
+          </form>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
+
+
