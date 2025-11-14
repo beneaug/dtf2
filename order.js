@@ -6,11 +6,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const decBtn = form.querySelectorAll(".order-qty-btn")[0];
   const incBtn = form.querySelectorAll(".order-qty-btn")[1];
   const statusEl = form.querySelector(".order-status");
-  const uploadInput = form.querySelector(".order-upload-input");
-  const previewEl = form.querySelector(".order-upload-preview");
-  const tabs = Array.from(form
-    .closest(".order-card")
-    .querySelectorAll(".order-tab"));
+  const card = form.closest(".order-card") || document;
+  const uploadInput = card.querySelector(".order-upload-input");
+  const previewEl = card.querySelector(".order-upload-preview");
+  const tabs = Array.from(card.querySelectorAll(".order-tab"));
 
   // Configurable endpoint so you can point this at your real backend later.
   const ORDERS_ENDPOINT =
