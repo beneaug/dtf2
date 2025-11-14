@@ -137,7 +137,7 @@
             // to a huge state so the page keeps a consistent gradient background.
             gradientConfig.heroY = 1.2 * vh; // even lower (further down) on the page
             gradientConfig.dockY = gradientConfig.heroY; // anchor vertically; scale does the work
-            gradientConfig.heroScale = 2.0; // ~200% larger than base
+            gradientConfig.heroScale = 2.2; // slightly larger starting blob on mobile
             gradientConfig.dockScale = 0.776; // ~3% smaller than 0.8 for a tighter dock
 
             if (headingRect) {
@@ -162,6 +162,9 @@
           // On ultra‑wide displays, start the return a bit earlier so it feels softer
           if (vw >= 1200) {
             gradientConfig.returnStart = scrollMax * 0.55;
+          } else if (vw < 768) {
+            // On mobile, stretch the return over a longer range for a more graceful feel
+            gradientConfig.returnStart = scrollMax * 0.5;
           }
           gradientConfig.returnEnd = scrollMax;
           gradientConfig.scrollMax = scrollMax;
