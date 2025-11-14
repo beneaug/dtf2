@@ -135,10 +135,10 @@
             // Start with the blob far below the viewport and heavily zoomed in,
             // then shrink toward the second text element, and finally grow back
             // to a huge state so the page keeps a consistent gradient background.
-            gradientConfig.heroY = 0.8 * vh; // center well below initial viewport
+            gradientConfig.heroY = 0.9 * vh; // slightly lower (further down) on the page
             gradientConfig.dockY = gradientConfig.heroY; // anchor vertically; scale does the work
             gradientConfig.heroScale = 2.0; // ~200% larger than base
-            gradientConfig.dockScale = 0.8; // tighter blob when "docked"
+            gradientConfig.dockScale = 0.776; // ~3% smaller than 0.8 for a tighter dock
 
             if (headingRect) {
               var targetXMobile = headingRect.left + headingRect.width * 0.1;
