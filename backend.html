@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>DTF Operator Console</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="order-body">
+    <!-- Reuse the same operator console markup and script as ops.html -->
+    <div class="page-root">
+      <div class="bg-gradient-root">
+        <div class="bg-gradient-wrapper">
+          <div class="bg-gradient-image"></div>
+        </div>
+        <div class="bg-grain-overlay"></div>
+      </div>
+
+      <main class="order-page">
+        <header class="order-hero">
+          <h1>DTF operator console</h1>
+          <p>
+            Review incoming transfer jobs, download artwork, and mark orders as
+            completed.
+          </p>
+        </header>
+
+        <section class="order-shell">
+          <div class="order-card" id="ops-root">
+            <div id="ops-login">
+              <h2 class="ops-subheading">Sign in</h2>
+              <form id="ops-login-form" class="order-form" novalidate>
+                <label class="order-field">
+                  <span class="order-field-label">Username</span>
+                  <input
+                    type="text"
+                    class="order-input"
+                    name="username"
+                    autocomplete="username"
+                  />
+                </label>
+                <label class="order-field">
+                  <span class="order-field-label">Password</span>
+                  <input
+                    type="password"
+                    class="order-input"
+                    name="password"
+                    autocomplete="current-password"
+                  />
+                </label>
+                <button class="order-primary-btn" type="submit">
+                  Sign in
+                </button>
+                <div class="order-status" id="ops-login-status"></div>
+              </form>
+            </div>
+
+            <div id="ops-orders" style="display: none">
+              <h2 class="ops-subheading">Pending & recent orders</h2>
+              <div class="order-status" id="ops-orders-status"></div>
+              <div class="ops-table-wrapper">
+                <table class="ops-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Created</th>
+                      <th>Size</th>
+                      <th>Qty</th>
+                      <th>Name</th>
+                      <th>Garment</th>
+                      <th>Notes</th>
+                      <th>Files</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="ops-table-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      async function opsFetch(url, options) {
+        const res = await fetch(url, {
+          credentials: "include",
+          ...options,
+        });
+        if (res.status === 401) {
+          throw new Error("unauthorized");
+        }
+        return res;
+      }
+
+      function setText(el, text) {
+        if (!el) return;
+        el.textContent = text;
+      }
+
+      async function loadOrders() {
+        const ordersPanel = document.getElementById("ops-orders");
+        const loginPanel = document.getElementById("ops-login");
+        const statusEl = document.getElementById("ops-orders-status");
+        const tbody = document.getElementById("ops-table-body");
+        try {
+          setText(statusEl, "Loading orders…");
+          const res = await opsFetch("/api/operator/orders");
+          const data = await res.json();
+          if (!data.ok) throw new Error(data.error || "Failed to load orders.");
+
+          loginPanel.style.display = "none";
+          ordersPanel.style.display = "";
+          setText(statusEl, "");
+
+          tbody.innerHTML = "";
+          data.orders.forEach((order) => {
+            const tr = document.createElement("tr");
+            const files = Array.isArray(order.files) ? order.files : [];
+            const fileCell =
+              files.map((f) => f.filename || f.key).join(", ") || "–";
+
+            tr.innerHTML = `
+              <td>${order.id}</td>
+              <td>${new Date(order.created_at).toLocaleString()}</td>
+              <td>${order.size || ""}</td>
+              <td>${order.quantity || ""}</td>
+              <td>${order.transfer_name || ""}</td>
+              <td>${order.garment_color || ""}</td>
+              <td>${order.notes || ""}</td>
+              <td>${fileCell}</td>
+              <td>${order.status || ""}</td>
+              <td>
+                <button
+                  class="ops-mark-complete"
+                  data-order-id="${order.id}"
+                  ${order.status === "completed" ? "disabled" : ""}
+                >
+                  Mark completed
+                </button>
+              </td>
+            `;
+            tbody.appendChild(tr);
+          });
+        } catch (err) {
+          console.error(err);
+          if (err.message === "unauthorized") {
+            // show login
+            document.getElementById("ops-login").style.display = "";
+            document.getElementById("ops-orders").style.display = "none";
+          } else {
+            setText(
+              statusEl,
+              "Failed to load orders. Check your connection or try again."
+            );
+          }
+        }
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        const loginForm = document.getElementById("ops-login-form");
+        const loginStatus = document.getElementById("ops-login-status");
+
+        loginForm.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          setText(loginStatus, "");
+          const formData = new FormData(loginForm);
+          const payload = {
+            username: formData.get("username"),
+            password: formData.get("password"),
+          };
+
+          try {
+            const res = await fetch("/api/operator/login", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.ok) {
+              throw new Error(data.error || "Login failed.");
+            }
+            setText(loginStatus, "");
+            await loadOrders();
+          } catch (err) {
+            console.error(err);
+            setText(
+              loginStatus,
+              "Login failed. Check your credentials and try again."
+            );
+          }
+        });
+
+        document
+          .getElementById("ops-table-body")
+          .addEventListener("click", async (event) => {
+            const btn = event.target.closest(".ops-mark-complete");
+            if (!btn) return;
+
+            const orderId = btn.getAttribute("data-order-id");
+            if (!orderId) return;
+
+            btn.disabled = true;
+            try {
+              const res = await opsFetch("/api/operator/orders", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  orderId: Number(orderId),
+                  status: "completed",
+                }),
+              });
+              const data = await res.json();
+              if (!res.ok || !data.ok) {
+                throw new Error(data.error || "Failed to update order.");
+              }
+              await loadOrders();
+            } catch (err) {
+              console.error(err);
+              btn.disabled = false;
+              alert("Failed to mark order as completed.");
+            }
+          });
+
+        loadOrders();
+      });
+    </script>
+  </body>
+</html>
+
+
