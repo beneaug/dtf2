@@ -131,10 +131,15 @@
             // Horizontal offset left as-is for laptops
             gradientConfig.dockOffsetX = -0.22 * vw;
           } else {
-            // Mobile: much more zoomed-in and lower at start, with longer travel
-            gradientConfig.heroY = 0.30 * vh; // start noticeably lower on first load
-            gradientConfig.dockScale = 0.9; // very zoomed-in blob on mobile
-            gradientConfig.dockY = 1.2 * vh; // travels much farther down the page
+            // MOBILE ONLY:
+            // Start with the blob far below the viewport and heavily zoomed in,
+            // then shrink toward the second text element, and finally grow back
+            // to a huge state so the page keeps a consistent gradient background.
+            gradientConfig.heroY = 0.8 * vh; // center well below initial viewport
+            gradientConfig.dockY = gradientConfig.heroY; // anchor vertically; scale does the work
+            gradientConfig.heroScale = 2.0; // ~200% larger than base
+            gradientConfig.dockScale = 0.8; // tighter blob when "docked"
+
             if (headingRect) {
               var targetXMobile = headingRect.left + headingRect.width * 0.1;
               gradientConfig.dockOffsetX = targetXMobile - vw / 2;
