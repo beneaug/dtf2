@@ -184,6 +184,40 @@ body {
   transform: translateY(0);
 }
 
+.cta-row {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem;
+  display: flex;
+  justify-content: center;
+}
+
+.order-now-btn {
+  padding: 0.9rem 2.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: transparent;
+  color: #ffffff;
+  font-size: 0.85rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 160ms ease-out, color 160ms ease-out,
+    background-color 160ms ease-out, transform 160ms ease-out;
+}
+
+.order-now-btn:hover {
+  border-color: rgba(255, 255, 255, 0.9);
+  background-color: rgba(255, 255, 255, 0.04);
+  transform: translateY(-1px);
+}
+
+.order-now-btn:active {
+  transform: translateY(0);
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
 .copy-section h2 {
   margin: 0 0 1rem;
   font-size: 1.6rem;
