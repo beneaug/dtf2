@@ -114,8 +114,8 @@
           if (vw >= 1200) {
             // Large desktop: small, tight blob high and left of the color section
             gradientConfig.heroY = 0;
-            gradientConfig.dockScale = 0.18;
-            gradientConfig.dockY = -0.78 * vh; // higher on very large displays
+            gradientConfig.dockScale = 0.17;
+            gradientConfig.dockY = -0.9 * vh; // sit higher on very large displays
             if (headingRect) {
               // place the blob left of the heading text, based on its actual position
               var targetXDesktop = headingRect.left - 80;
@@ -131,10 +131,10 @@
             // Laptop view is tuned visually; keep existing horizontal offset
             gradientConfig.dockOffsetX = -0.22 * vw;
           } else {
-            // Mobile: move from slightly above hero to clearly below the heading
-            gradientConfig.heroY = 0.0 * vh; // start at hero baseline
-            gradientConfig.dockScale = 0.55;
-            gradientConfig.dockY = 0.28 * vh; // clearly below hero text
+            // Mobile: gradient starts a bit lower and travels further down
+            gradientConfig.heroY = 0.14 * vh; // lower starting point on first load
+            gradientConfig.dockScale = 0.7; // larger, more present blob
+            gradientConfig.dockY = 0.7 * vh; // travels well below the heading
             if (headingRect) {
               var targetXMobile = headingRect.left + headingRect.width * 0.1;
               gradientConfig.dockOffsetX = targetXMobile - vw / 2;
@@ -151,9 +151,13 @@
             gradientConfig.toDockEnd = gradientConfig.toDockStart + vh * 0.5;
           }
 
-          // begin returning over the bottom ~25% of the page, but leave a plateau
+          // begin returning over the bottom portion of the page, but leave a plateau
           // after docking so it can "hang out" near the color section
           gradientConfig.returnStart = scrollMax * 0.6;
+          // On ultra‑wide displays, start the return a bit earlier so it feels softer
+          if (vw >= 1200) {
+            gradientConfig.returnStart = scrollMax * 0.55;
+          }
           gradientConfig.returnEnd = scrollMax;
           gradientConfig.scrollMax = scrollMax;
         }
