@@ -78,11 +78,11 @@
 
         var gradientConfig = {
           heroY: 0,
-          dockY: -580, // initial values; will be refined responsively
+          dockY: -580, // initial values; refined responsively in recalcGradientBounds
           heroScale: 1,
-          dockScale: 0.25, // initial; will be refined responsively
+          dockScale: 0.25, // initial; refined responsively
           heroOffsetX: 0, // centered under hero
-          dockOffsetX: -220, // initial; will be refined responsively
+          dockOffsetX: -220, // initial; refined responsively
           toDockStart: 0,
           toDockEnd: 1,
           returnStart: 1,
@@ -107,35 +107,39 @@
           );
           var scrollMax = scrollHeight - vh;
 
-          // Responsive dock position based on viewport size so the effect
+          // Responsive dock + hero positions based on viewport so the effect
           // stays visually consistent across desktop and mobile.
           if (vw >= 1200) {
-            // Large desktop: small, tight blob quite high and to the left
-            gradientConfig.dockScale = 0.20;
-            gradientConfig.dockY = -0.46 * vh;
-            gradientConfig.dockOffsetX = -0.24 * vw;
+            // Large desktop: small, tight blob high and left of the color section
+            gradientConfig.heroY = 0;
+            gradientConfig.dockScale = 0.18;
+            gradientConfig.dockY = -0.78 * vh; // higher on very large displays
+            gradientConfig.dockOffsetX = -0.26 * vw;
           } else if (vw >= 768) {
             // Laptop / tablet landscape
-            gradientConfig.dockScale = 0.25;
-            gradientConfig.dockY = -0.40 * vh;
-            gradientConfig.dockOffsetX = -0.20 * vw;
+            gradientConfig.heroY = 0;
+            gradientConfig.dockScale = 0.22;
+            gradientConfig.dockY = -0.7 * vh; // higher on laptops
+            gradientConfig.dockOffsetX = -0.22 * vw;
           } else {
-            // Mobile: slightly larger and lower, but still clearly above the fold
-            gradientConfig.dockScale = 0.46;
-            gradientConfig.dockY = -0.22 * vh;
-            gradientConfig.dockOffsetX = -0.08 * vw;
+            // Mobile: move from slightly above hero to clearly below the heading
+            gradientConfig.heroY = -0.10 * vh;
+            gradientConfig.dockScale = 0.50;
+            gradientConfig.dockY = 0.05 * vh; // sit closer to the heading
+            gradientConfig.dockOffsetX = -0.04 * vw;
           }
 
           // start travelling essentially as soon as the user scrolls
           gradientConfig.toDockStart = 0;
-          gradientConfig.toDockEnd = secondTop - vh * 0.3; // reach docked state ~5% sooner
+          // reach docked state with less scroll distance (sooner)
+          gradientConfig.toDockEnd = secondTop - vh * 0.2;
           if (gradientConfig.toDockEnd <= gradientConfig.toDockStart) {
             gradientConfig.toDockEnd = gradientConfig.toDockStart + vh * 0.5;
           }
 
-          // begin returning over the bottom 15% of the page, but leave a plateau
+          // begin returning over the bottom ~25% of the page, but leave a plateau
           // after docking so it can "hang out" near the color section
-          gradientConfig.returnStart = scrollMax * 0.75;
+          gradientConfig.returnStart = scrollMax * 0.6;
           gradientConfig.returnEnd = scrollMax;
           gradientConfig.scrollMax = scrollMax;
         }
