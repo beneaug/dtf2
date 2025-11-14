@@ -1,3 +1,0 @@
-module.exports=[53787,a=>{"use strict";var b=a.i(26122);function c({children:a}){return(0,b.jsx)("html",{lang:"en",suppressHydrationWarning:!0,children:(0,b.jsx)("body",{className:"min-h-screen bg-[#050507] text-slate-50 antialiased",children:a})})}a.s(["default",()=>c,"metadata",0,{title:"Lovable Thermal Hero",description:"Landing page with a thermal hero background inspired by Lovable.dev"}])}];
-
-//# sourceMappingURL=dtf2_app_layout_tsx_f1317e5b._.js.map
