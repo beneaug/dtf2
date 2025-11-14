@@ -14,6 +14,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const transferNameInput = form.querySelector('input[name="transferName"]');
   const garmentColorSelect = form.querySelector('select[name="garmentColor"]');
   const priceNoteEl = form.querySelector(".order-price-note");
+  const qtySummaryEl = form.querySelector(".order-summary-qty");
+  const totalSummaryEl = form.querySelector(".order-summary-total");
+  const artSizeEl = form.querySelector(".order-summary-art-size");
 
   // Configurable endpoint so you can point this at your real backend later.
   const ORDERS_ENDPOINT =
@@ -83,18 +86,27 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function updatePricingDisplay() {
-    if (!priceNoteEl || !sizeSelect || !qtyInput) return;
+    if (!sizeSelect || !qtyInput) return;
     const sizeLabel = sizeSelect.value;
     const qty = clampQuantity(qtyInput.value);
     const unitPrice = getUnitPrice(sizeLabel, qty);
     if (!unitPrice) {
-      priceNoteEl.textContent = "Pricing will be confirmed by 12ozCollective.";
+      if (priceNoteEl) {
+        priceNoteEl.textContent =
+          "Pricing will be confirmed by 12ozCollective.";
+      }
+      if (totalSummaryEl) totalSummaryEl.textContent = "$0.00";
+      if (qtySummaryEl) qtySummaryEl.textContent = String(qty);
       return;
     }
     const total = unitPrice * qty;
-    priceNoteEl.textContent = `${formatPrice(
-      unitPrice
-    )} per transfer · ${formatPrice(total)} total`;
+    if (priceNoteEl) {
+      priceNoteEl.textContent = `${formatPrice(
+        unitPrice
+      )} per transfer · ${formatPrice(total)} total`;
+    }
+    if (qtySummaryEl) qtySummaryEl.textContent = String(qty);
+    if (totalSummaryEl) totalSummaryEl.textContent = formatPrice(total);
   }
 
   // Artwork preview in the upload area
@@ -136,6 +148,34 @@ document.addEventListener("DOMContentLoaded", () => {
         img.src = URL.createObjectURL(file);
         img.onload = () => {
           applyPreviewSizing();
+          // Actual artwork size calculation
+          if (artSizeEl && sizeSelect) {
+            const label = sizeSelect.value;
+            const match =
+              label && label.match(/(\d+(?:\.\d+)?)"\s*x\s*(\d+(?:\.\d+)?)/);
+            if (match) {
+              const boxW = parseFloat(match[1]);
+              const boxH = parseFloat(match[2]);
+              const naturalW = img.naturalWidth || 1;
+              const naturalH = img.naturalHeight || 1;
+              const aspect = naturalW / naturalH;
+              const boxAspect = boxW / boxH;
+
+              let artW, artH;
+              if (aspect >= boxAspect) {
+                artW = boxW;
+                artH = boxW / aspect;
+              } else {
+                artH = boxH;
+                artW = boxH * aspect;
+              }
+              artSizeEl.textContent = `${artW.toFixed(2)}" × ${artH.toFixed(
+                2
+              )}"`;
+            } else {
+              artSizeEl.textContent = label;
+            }
+          }
           // Release memory once the image is loaded
           URL.revokeObjectURL(img.src);
         };
@@ -215,7 +255,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const formData = new FormData(form);
       formData.set("quantity", String(clampQuantity(qtyInput.value)));
       formData.set("mode", currentMode);
-       // include pricing info if available
+      // include pricing info if available
       const sizeLabel = sizeSelect && sizeSelect.value;
       const qty = clampQuantity(qtyInput.value);
       const unitPrice = sizeLabel ? getUnitPrice(sizeLabel, qty) : null;
@@ -234,8 +274,14 @@ document.addEventListener("DOMContentLoaded", () => {
         throw new Error(text || `Server responded with ${response.status}`);
       }
 
+      const data = await response.json().catch(() => ({}));
+      if (data && data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+        return;
+      }
+
       setStatus(
-        "Order received. This is a demo endpoint – 12ozCollective will wire this into your real production workflow.",
+        "Order received. You can safely close this page.",
         "success"
       );
     } catch (err) {
@@ -246,7 +292,7 @@ document.addEventListener("DOMContentLoaded", () => {
       );
     } finally {
       submitBtn.disabled = false;
-      submitBtn.textContent = "Add to cart";
+      submitBtn.textContent = "Checkout";
     }
   });
 });

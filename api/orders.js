@@ -5,6 +5,7 @@
 const Busboy = require("busboy");
 const { Pool } = require("pg");
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const Stripe = require("stripe");
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -18,6 +19,10 @@ const s3 = new S3Client({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
 });
+
+const stripe =
+  process.env.STRIPE_SECRET_KEY &&
+  Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-04-10" });
 
 module.exports = (req, res) => {
   if (req.method !== "POST") {
@@ -131,6 +136,40 @@ module.exports = (req, res) => {
 
         const order = result.rows[0];
 
+        let checkoutUrl = null;
+        if (stripe && totalPriceCents && totalPriceCents > 0) {
+          const session = await stripe.checkout.sessions.create({
+            mode: "payment",
+            payment_method_types: ["card"],
+            line_items: [
+              {
+                price_data: {
+                  currency: "usd",
+                  product_data: {
+                    name:
+                      transferName ||
+                      `DTF transfer order #${order.id}`,
+                  },
+                  // charge per transfer, quantity is number of transfers
+                  unit_amount:
+                    unitPriceCents || Math.max(1, Math.round(totalPriceCents / quantity)),
+                },
+                quantity,
+              },
+            ],
+            metadata: {
+              order_id: order.id.toString(),
+            },
+            success_url:
+              process.env.STRIPE_SUCCESS_URL ||
+              `${(req.headers.origin || "").replace(/\/$/, "")}/order.html?success=1&orderId=${order.id}`,
+            cancel_url:
+              process.env.STRIPE_CANCEL_URL ||
+              `${(req.headers.origin || "").replace(/\/$/, "")}/order.html?canceled=1`,
+          });
+          checkoutUrl = session.url;
+        }
+
         res.statusCode = 200;
         res.setHeader("Content-Type", "application/json");
         return res.end(
@@ -138,6 +177,7 @@ module.exports = (req, res) => {
             ok: true,
             orderId: order.id,
             createdAt: order.created_at,
+            checkoutUrl,
           })
         );
       } finally {

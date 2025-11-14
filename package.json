@@ -10,7 +10,8 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.609.0",
     "busboy": "^1.6.0",
-    "pg": "^8.11.5"
+    "pg": "^8.11.5",
+    "stripe": "^14.0.0"
   }
 }
 

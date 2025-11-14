@@ -495,6 +495,27 @@ body {
   color: #b8b8b8;
 }
 
+.order-summary {
+  margin-top: 0.85rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 0.9rem;
+  font-size: 0.82rem;
+}
+
+.order-summary-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.25rem;
+}
+
+.order-summary-label {
+  color: #a0a0a0;
+}
+
+.order-summary-value {
+  font-weight: 500;
+}
+
 .order-actions {
   display: flex;
   flex-direction: column;
