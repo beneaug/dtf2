@@ -11,6 +11,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const previewEl = card.querySelector(".order-upload-preview");
   const tabs = Array.from(card.querySelectorAll(".order-tab"));
   const sizeSelect = form.querySelector('select[name="size"]');
+  const transferNameInput = form.querySelector('input[name="transferName"]');
+  const garmentColorSelect = form.querySelector('select[name="garmentColor"]');
+  const priceNoteEl = form.querySelector(".order-price-note");
 
   // Configurable endpoint so you can point this at your real backend later.
   const ORDERS_ENDPOINT =
@@ -41,6 +44,57 @@ document.addEventListener("DOMContentLoaded", () => {
     qtyInput.addEventListener("blur", () => {
       qtyInput.value = clampQuantity(qtyInput.value);
     });
+  }
+
+  // Pricing bands (USD per transfer) scraped from SupaDTF
+  const PRICE_BANDS = {
+    '2" x 2"': [1.0, 0.65, 0.55, 0.45],
+    '4" x 2"': [1.95, 1.25, 1.05, 0.9],
+    '3" x 3"': [2.25, 1.45, 1.25, 1.0],
+    '5" x 3"': [2.95, 1.95, 1.65, 1.35],
+    '4" x 4"': [2.95, 1.95, 1.65, 1.35],
+    '5" x 5"': [3.95, 2.55, 2.15, 1.8],
+    '6" x 6"': [4.95, 3.2, 2.7, 2.2],
+    '7" x 7"': [5.95, 3.85, 3.25, 2.7],
+    '11" x 5"': [6.4, 4.2, 3.55, 2.9],
+    '8" x 8"': [6.95, 4.5, 3.8, 3.1],
+    '9" x 9"': [7.95, 5.15, 4.39, 3.5],
+    '9" x 11"': [8.45, 5.5, 4.65, 3.8],
+    '10" x 10"': [8.95, 5.8, 4.9, 4.0],
+    '11" x 11"': [9.95, 6.4, 5.4, 4.5],
+    '11" x 14"': [11.45, 7.4, 6.3, 5.15],
+    '12" x 17"': [14.4, 9.4, 7.95, 6.4],
+    '12" x 22"': [15.31, 12.41, 10.82, 9.24],
+  };
+
+  function getUnitPrice(sizeLabel, qty) {
+    const bands = PRICE_BANDS[sizeLabel];
+    if (!bands) return null;
+    let idx = 0;
+    if (qty <= 9) idx = 0;
+    else if (qty <= 49) idx = 1;
+    else if (qty <= 99) idx = 2;
+    else idx = 3;
+    return bands[idx];
+  }
+
+  function formatPrice(n) {
+    return `$${n.toFixed(2)}`;
+  }
+
+  function updatePricingDisplay() {
+    if (!priceNoteEl || !sizeSelect || !qtyInput) return;
+    const sizeLabel = sizeSelect.value;
+    const qty = clampQuantity(qtyInput.value);
+    const unitPrice = getUnitPrice(sizeLabel, qty);
+    if (!unitPrice) {
+      priceNoteEl.textContent = "Pricing will be confirmed by 12ozCollective.";
+      return;
+    }
+    const total = unitPrice * qty;
+    priceNoteEl.textContent = `${formatPrice(
+      unitPrice
+    )} per transfer · ${formatPrice(total)} total`;
   }
 
   // Artwork preview in the upload area
@@ -99,9 +153,18 @@ document.addEventListener("DOMContentLoaded", () => {
     if (sizeSelect) {
       sizeSelect.addEventListener("change", () => {
         applyPreviewSizing();
+        updatePricingDisplay();
       });
     }
   }
+
+  if (sizeSelect) {
+    sizeSelect.addEventListener("change", updatePricingDisplay);
+  }
+  if (qtyInput) {
+    qtyInput.addEventListener("input", updatePricingDisplay);
+  }
+  updatePricingDisplay();
 
   // Mode tabs – just cosmetic for now, but we record the choice.
   let currentMode = "single-image";
@@ -122,6 +185,17 @@ document.addEventListener("DOMContentLoaded", () => {
     setStatus("", "info");
 
     // Client-side validation
+    if (!transferNameInput || !transferNameInput.value.trim()) {
+      setStatus("Please name this transfer run.", "error");
+      transferNameInput && transferNameInput.focus();
+      return;
+    }
+
+    if (!garmentColorSelect || !garmentColorSelect.value) {
+      setStatus("Please choose a garment color.", "error");
+      garmentColorSelect && garmentColorSelect.focus();
+      return;
+    }
     if (!uploadInput || !uploadInput.files || uploadInput.files.length === 0) {
       setStatus("Please upload at least one artwork file.", "error");
       uploadInput && uploadInput.focus();
@@ -141,6 +215,14 @@ document.addEventListener("DOMContentLoaded", () => {
       const formData = new FormData(form);
       formData.set("quantity", String(clampQuantity(qtyInput.value)));
       formData.set("mode", currentMode);
+       // include pricing info if available
+      const sizeLabel = sizeSelect && sizeSelect.value;
+      const qty = clampQuantity(qtyInput.value);
+      const unitPrice = sizeLabel ? getUnitPrice(sizeLabel, qty) : null;
+      if (unitPrice != null) {
+        formData.set("unitPrice", String(unitPrice));
+        formData.set("totalPrice", String(unitPrice * qty));
+      }
 
       const response = await fetch(ORDERS_ENDPOINT, {
         method: "POST",

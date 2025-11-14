@@ -82,6 +82,19 @@ module.exports = (req, res) => {
         const garmentColor = fields.garmentColor || null;
         const notes = fields.notes || null;
 
+        const unitPrice = fields.unitPrice ? parseFloat(fields.unitPrice) : null;
+        const totalPrice = fields.totalPrice
+          ? parseFloat(fields.totalPrice)
+          : null;
+        const unitPriceCents =
+          Number.isFinite(unitPrice) && unitPrice >= 0
+            ? Math.round(unitPrice * 100)
+            : null;
+        const totalPriceCents =
+          Number.isFinite(totalPrice) && totalPrice >= 0
+            ? Math.round(totalPrice * 100)
+            : null;
+
         // Example table:
         // CREATE TABLE dtf_orders (
         //   id serial PRIMARY KEY,
@@ -92,13 +105,16 @@ module.exports = (req, res) => {
         //   transfer_name text,
         //   garment_color text,
         //   notes text,
-        //   files jsonb
+        //   files jsonb,
+        //   unit_price_cents integer,
+        //   total_price_cents integer
         // );
 
         const result = await client.query(
           `INSERT INTO dtf_orders
-             (mode, size, quantity, transfer_name, garment_color, notes, files)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           (mode, size, quantity, transfer_name, garment_color, notes, files,
+            unit_price_cents, total_price_cents)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
            RETURNING id, created_at`,
           [
             mode,
@@ -108,6 +124,8 @@ module.exports = (req, res) => {
             garmentColor,
             notes,
             JSON.stringify(uploadedFiles),
+            unitPriceCents,
+            totalPriceCents,
           ]
         );
 
