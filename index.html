@@ -112,10 +112,10 @@
           var heading = secondSection.querySelector("h2");
           var headingRect = heading ? heading.getBoundingClientRect() : null;
           if (vw >= 1200) {
-            // Large desktop: small, tight blob high and left of the color section
+            // Large desktop: small, tight blob very high and left of the color section
             gradientConfig.heroY = 0;
             gradientConfig.dockScale = 0.17;
-            gradientConfig.dockY = -0.9 * vh; // sit higher on very large displays
+            gradientConfig.dockY = -1.0 * vh; // sit even higher on very large displays
             if (headingRect) {
               // place the blob left of the heading text, based on its actual position
               var targetXDesktop = headingRect.left - 80;
@@ -124,17 +124,17 @@
               gradientConfig.dockOffsetX = -0.26 * vw;
             }
           } else if (vw >= 768) {
-            // Laptop / tablet landscape
+            // Laptop / tablet landscape  (LOCKED: do not tweak this branch)
             gradientConfig.heroY = 0;
             gradientConfig.dockScale = 0.22;
-            gradientConfig.dockY = -0.7 * vh; // higher on laptops
-            // Laptop view is tuned visually; keep existing horizontal offset
+            gradientConfig.dockY = -0.6 * vh; // slightly lower dock for laptops
+            // Horizontal offset left as-is for laptops
             gradientConfig.dockOffsetX = -0.22 * vw;
           } else {
-            // Mobile: gradient starts a bit lower and travels further down
-            gradientConfig.heroY = 0.14 * vh; // lower starting point on first load
-            gradientConfig.dockScale = 0.7; // larger, more present blob
-            gradientConfig.dockY = 0.7 * vh; // travels well below the heading
+            // Mobile: much more zoomed-in and lower at start, with longer travel
+            gradientConfig.heroY = 0.30 * vh; // start noticeably lower on first load
+            gradientConfig.dockScale = 0.9; // very zoomed-in blob on mobile
+            gradientConfig.dockY = 1.2 * vh; // travels much farther down the page
             if (headingRect) {
               var targetXMobile = headingRect.left + headingRect.width * 0.1;
               gradientConfig.dockOffsetX = targetXMobile - vw / 2;
