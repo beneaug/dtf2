@@ -27,7 +27,7 @@
         </section>
 
         <section class="copy-section">
-          <h2>Turn heat into stories worth wearing</h2>
+          <h2>Consistent peels, less waste.</h2>
           <p>
             Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aliquam
             laoreet, arcu ut iaculis pulvinar, ligula nisl convallis nibh, vel
@@ -37,7 +37,7 @@
         </section>
 
         <section class="copy-section">
-          <h2>Dialed workflows for every drop</h2>
+          <h2>Unmatched vibrancy and depth</h2>
           <p>
             Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer
             porttitor turpis ac nibh tempor, at lacinia eros placerat. Sed
@@ -74,44 +74,137 @@
         var image = document.querySelector(".bg-gradient-image");
         var hero = document.querySelector(".hero");
         var sections = document.querySelectorAll(".copy-section");
+        var secondSection = sections.length > 1 ? sections[1] : null;
 
-        if (image) {
-          var maxOffset = 160; // px
-          var factor = -0.18; // stronger background drift on scroll
+        var gradientConfig = {
+          heroY: 0,
+          dockY: -580, // sit much higher relative to the sections
+          heroScale: 1,
+          dockScale: 0.25, // smaller, tighter blob
+          heroOffsetX: 0, // centered under hero
+          dockOffsetX: -220, // shift left of the second text block
+          toDockStart: 0,
+          toDockEnd: 1,
+          returnStart: 1,
+          returnEnd: 1,
+          scrollMax: 1
+        };
 
-          function onScroll() {
-            var scrollY = window.scrollY || window.pageYOffset || 0;
-            var offset = scrollY * factor;
+        function recalcGradientBounds() {
+          if (!hero || !secondSection) return;
+          var heroHeight = hero.offsetHeight || window.innerHeight || 1;
+          var secondTop = secondSection.offsetTop;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          var doc = document.documentElement;
+          var body = document.body;
+          var scrollHeight = Math.max(
+            body.scrollHeight,
+            body.offsetHeight,
+            doc.clientHeight,
+            doc.scrollHeight,
+            doc.offsetHeight
+          );
+          var scrollMax = scrollHeight - vh;
 
-            if (offset > maxOffset) offset = maxOffset;
-            if (offset < -maxOffset) offset = -maxOffset;
-
-            image.style.transform =
-              "translate3d(-50%, " + offset.toFixed(2) + "px, 0)";
-
-            if (hero) {
-              var heroHeight = hero.offsetHeight || window.innerHeight || 1;
-              var progress = scrollY / heroHeight;
-              if (progress < 0) progress = 0;
-              if (progress > 1) progress = 1;
-
-              var translateY = -40 * progress; // px, hero drifts slightly up
-              var scale = 1 - 0.04 * progress; // small scale down
-              var opacity = 1 - 0.35 * progress; // fade out slightly
-
-              hero.style.transform =
-                "translate3d(0, " +
-                translateY.toFixed(2) +
-                "px, 0) scale(" +
-                scale.toFixed(3) +
-                ")";
-              hero.style.opacity = opacity.toFixed(3);
-            }
+          // start travelling essentially as soon as the user scrolls
+          gradientConfig.toDockStart = 0;
+          gradientConfig.toDockEnd = secondTop - vh * 0.30; // reach docked state ~5% sooner
+          if (gradientConfig.toDockEnd <= gradientConfig.toDockStart) {
+            gradientConfig.toDockEnd = gradientConfig.toDockStart + vh * 0.5;
           }
 
-          window.addEventListener("scroll", onScroll, { passive: true });
-          onScroll();
+          // begin returning over the bottom 15% of the page, starting ~5% earlier
+          gradientConfig.returnStart = scrollMax * 0.65;
+          gradientConfig.returnEnd = scrollMax;
+          gradientConfig.scrollMax = scrollMax;
         }
+
+        function clamp01(v) {
+          return v < 0 ? 0 : v > 1 ? 1 : v;
+        }
+
+        function onScroll() {
+          var scrollY = window.scrollY || window.pageYOffset || 0;
+
+          if (image && secondSection) {
+            var y, scale, offsetX;
+
+            if (scrollY <= gradientConfig.toDockStart) {
+              y = gradientConfig.heroY;
+              scale = gradientConfig.heroScale;
+              offsetX = gradientConfig.heroOffsetX;
+            } else if (scrollY <= gradientConfig.toDockEnd) {
+              var t =
+                (scrollY - gradientConfig.toDockStart) /
+                (gradientConfig.toDockEnd - gradientConfig.toDockStart);
+              t = clamp01(t);
+              y =
+                gradientConfig.heroY +
+                (gradientConfig.dockY - gradientConfig.heroY) * t;
+              scale =
+                gradientConfig.heroScale +
+                (gradientConfig.dockScale - gradientConfig.heroScale) * t;
+              offsetX =
+                gradientConfig.heroOffsetX +
+                (gradientConfig.dockOffsetX - gradientConfig.heroOffsetX) * t;
+            } else if (scrollY < gradientConfig.returnStart) {
+              y = gradientConfig.dockY;
+              scale = gradientConfig.dockScale;
+              offsetX = gradientConfig.dockOffsetX;
+            } else {
+              var u =
+                (scrollY - gradientConfig.returnStart) /
+                (gradientConfig.returnEnd - gradientConfig.returnStart || 1);
+              u = clamp01(u);
+              y =
+                gradientConfig.dockY +
+                (gradientConfig.heroY - gradientConfig.dockY) * u;
+              scale =
+                gradientConfig.dockScale +
+                (gradientConfig.heroScale - gradientConfig.dockScale) * u;
+              offsetX =
+                gradientConfig.dockOffsetX +
+                (gradientConfig.heroOffsetX - gradientConfig.dockOffsetX) * u;
+            }
+
+            image.style.setProperty("--gradient-y", y.toFixed(2) + "px");
+            image.style.setProperty(
+              "--gradient-scale",
+              scale.toFixed(3)
+            );
+            image.style.setProperty(
+              "--gradient-offset-x",
+              offsetX.toFixed(2) + "px"
+            );
+          }
+
+          if (hero) {
+            var heroHeight2 = hero.offsetHeight || window.innerHeight || 1;
+            var progress = scrollY / heroHeight2;
+            if (progress < 0) progress = 0;
+            if (progress > 1) progress = 1;
+
+            var translateY = -40 * progress;
+            var scaleHero = 1 - 0.04 * progress;
+            var opacity = 1 - 0.35 * progress;
+
+            hero.style.transform =
+              "translate3d(0, " +
+              translateY.toFixed(2) +
+              "px, 0) scale(" +
+              scaleHero.toFixed(3) +
+              ")";
+            hero.style.opacity = opacity.toFixed(3);
+          }
+        }
+
+        recalcGradientBounds();
+        window.addEventListener("scroll", onScroll, { passive: true });
+        window.addEventListener("resize", function () {
+          recalcGradientBounds();
+          onScroll();
+        });
+        onScroll();
 
         if ("IntersectionObserver" in window && sections.length) {
           var observer = new IntersectionObserver(
