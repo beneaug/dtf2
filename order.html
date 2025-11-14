@@ -10,7 +10,15 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body class="order-body">
-    <main class="order-page">
+    <div class="page-root">
+      <div class="bg-gradient-root">
+        <div class="bg-gradient-wrapper">
+          <div class="bg-gradient-image"></div>
+        </div>
+        <div class="bg-grain-overlay"></div>
+      </div>
+
+      <main class="order-page">
       <header class="order-hero">
         <h1>Order DTF transfers</h1>
         <p>
@@ -40,6 +48,7 @@
               <input
                 class="order-upload-input"
                 type="file"
+                name="artwork"
                 accept=".jpg,.jpeg,.png,.gif,.bmp,.eps,.pdf,.ai,.svg,.psd,.tif,.tiff"
               />
             </label>
@@ -48,11 +57,15 @@
             </p>
           </div>
 
-          <form class="order-form" action="#" method="post">
+          <form class="order-form" action="#" method="post" novalidate>
             <div class="order-grid">
               <label class="order-field">
                 <span class="order-field-label">Size</span>
-                <select class="order-input order-select">
+                <select
+                  class="order-input order-select"
+                  name="size"
+                  required
+                >
                   <option>2" x 2"</option>
                   <option>4" x 4"</option>
                   <option>6" x 6"</option>
@@ -68,6 +81,7 @@
                     class="order-qty-input"
                     type="number"
                     min="1"
+                    name="quantity"
                     value="1"
                   />
                   <button class="order-qty-btn" type="button">+</button>
@@ -82,13 +96,18 @@
                 <input
                   class="order-input"
                   type="text"
+                  name="transferName"
                   placeholder="Name this transfer run"
                 />
               </label>
 
               <label class="order-field">
                 <span class="order-field-label">Garment color</span>
-                <select class="order-input order-select">
+                <select
+                  class="order-input order-select"
+                  name="garmentColor"
+                  required
+                >
                   <option value="">Choose your fabric color</option>
                   <option>Light / white</option>
                   <option>Mid-tone</option>
@@ -102,23 +121,29 @@
               <textarea
                 class="order-input order-textarea"
                 rows="3"
+                name="notes"
                 placeholder="Tell us anything important about inks, surfaces, or deadlines."
               ></textarea>
             </label>
 
             <div class="order-actions">
               <button class="order-primary-btn" type="submit">
-                Add to cart (demo)
+                Add to cart
               </button>
               <span class="order-disclaimer">
-                This is a proof-of-concept checkout – no payment or files are
-                actually sent.
+                Files are uploaded securely; this is still a preview workflow –
+                you will be contacted by 12ozCollective before anything is
+                printed or billed.
               </span>
             </div>
+
+            <div class="order-status" aria-live="polite"></div>
           </form>
         </div>
       </section>
     </main>
+  </div>
+  <script src="order.js"></script>
   </body>
 </html>
 
