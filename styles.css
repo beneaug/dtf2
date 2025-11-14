@@ -176,7 +176,7 @@ body {
 }
 
 .copy-section--last {
-  padding-bottom: 4rem; /* reduce dead space before CTA/footer */
+  padding-bottom: 4rem; /* space between final copy and CTA */
 }
 
 .copy-section--visible {
@@ -187,7 +187,8 @@ body {
 .cta-row {
   max-width: 48rem;
   margin: 0 auto;
-  padding: 2rem 1.5rem 3rem; /* center CTA better between copy and footer */
+  /* equal-ish breathing room above and below the button */
+  padding: 2rem 1.5rem 2rem;
   display: flex;
   justify-content: center;
 }
@@ -573,7 +574,8 @@ body {
 .page-footer {
   position: relative;
   z-index: 1;
-  min-height: 32vh; /* slightly tighter vertical spacing */
+  /* Reduce footer height so space below the CTA is closer to space above */
+  min-height: 18vh;
   display: flex;
   align-items: flex-end;
   justify-content: center;
