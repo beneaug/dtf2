@@ -22,7 +22,7 @@
       <!-- Foreground content -->
       <main class="page-content">
         <section class="hero">
-          <h1>Finally. DTF you're gonna love.</h1>
+          <h1>Finally, DTF you're gonna love.</h1>
           <p>Organized and orchestrated by 12ozCollective.</p>
         </section>
 
@@ -148,6 +148,11 @@
           return v < 0 ? 0 : v > 1 ? 1 : v;
         }
 
+        function easeInOutCubic(x) {
+          x = clamp01(x);
+          return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 1, 3) / 2;
+        }
+
         function onScroll() {
           var scrollY = window.scrollY || window.pageYOffset || 0;
 
@@ -177,10 +182,10 @@
               scale = gradientConfig.dockScale;
               offsetX = gradientConfig.dockOffsetX;
             } else {
-              var u =
+              var uLinear =
                 (scrollY - gradientConfig.returnStart) /
                 (gradientConfig.returnEnd - gradientConfig.returnStart || 1);
-              u = clamp01(u);
+              var u = easeInOutCubic(uLinear);
               y =
                 gradientConfig.dockY +
                 (gradientConfig.heroY - gradientConfig.dockY) * u;
