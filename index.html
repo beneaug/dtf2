@@ -6,8 +6,9 @@
     <title>Dancing Gradient Heat Diffusion</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body class="heat-bg">
+  <body class="grainy-bg">
     <main class="hero">
+      <div class="heat-blob" aria-hidden="true"></div>
       <div class="hero-inner">
         <p class="eyebrow">Experimental visual</p>
         <h1>Dancing gradient diffusion</h1>
@@ -17,6 +18,24 @@
         </p>
       </div>
     </main>
+
+    <script>
+      const blob = document.querySelector(".heat-blob");
+
+      if (blob) {
+        window.addEventListener("pointermove", (event) => {
+          const { innerWidth, innerHeight } = window;
+          const xNorm = event.clientX / innerWidth - 0.5;
+          const yNorm = event.clientY / innerHeight - 0.5;
+
+          const xOffset = xNorm * 40; // horizontal sway in px
+          const yOffset = yNorm * 24; // vertical sway in px
+
+          blob.style.setProperty("--blob-x", `${xOffset}px`);
+          blob.style.setProperty("--blob-y", `${yOffset}px`);
+        });
+      }
+    </script>
   </body>
 </html>
 
