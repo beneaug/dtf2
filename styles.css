@@ -103,6 +103,14 @@ body {
   will-change: transform;
 }
 
+@media (max-width: 767px) {
+  /* On mobile, update the gradient position without CSS transitions to
+     avoid jitter during fast scroll / flick gestures. */
+  .bg-gradient-image {
+    transition: none;
+  }
+}
+
 /* Grain overlay: taken from view-source lovable.dev (different host path) */
 .bg-grain-overlay {
   position: absolute;
