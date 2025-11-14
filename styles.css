@@ -490,6 +490,17 @@ body {
   font-size: 0.9rem;
 }
 
+/* Remove native number spinners so only our +/- controls are visible */
+.order-qty-input[type="number"]::-webkit-outer-border-spin-button,
+.order-qty-input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.order-qty-input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 .order-price-note {
   font-size: 0.8rem;
   color: #b8b8b8;

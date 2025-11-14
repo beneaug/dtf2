@@ -37,11 +37,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (qtyInput && decBtn && incBtn) {
     decBtn.addEventListener("click", () => {
-      qtyInput.value = clampQuantity(qtyInput.value - 1);
+      const current = Number(qtyInput.value || "0");
+      qtyInput.value = clampQuantity(current - 1);
+      applyPreviewSizing();
+      if (sizeSelect) {
+        // keep price/preview in sync
+        const qty = clampQuantity(qtyInput.value);
+        qtyInput.value = qty;
+        if (typeof getUnitPrice === "function") {
+          // no-op here, real update happens in updatePreview/price
+        }
+      }
     });
 
     incBtn.addEventListener("click", () => {
-      qtyInput.value = clampQuantity(qtyInput.value + 1);
+      const current = Number(qtyInput.value || "0");
+      qtyInput.value = clampQuantity(current + 1);
+      applyPreviewSizing();
+      if (sizeSelect) {
+        const qty = clampQuantity(qtyInput.value);
+        qtyInput.value = qty;
+      }
     });
 
     qtyInput.addEventListener("blur", () => {
