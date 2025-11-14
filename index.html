@@ -60,28 +60,80 @@
           </p>
         </section>
       </main>
+
+      <footer class="page-footer">
+        <img
+          src="https://raw.githubusercontent.com/beneaug/embroideryestimator/refs/heads/main/12ozcollective-logo-Bx1lkEfX.png"
+          alt="12ozCollective logo"
+          class="footer-logo"
+        />
+      </footer>
     </div>
     <script>
       (function () {
         var image = document.querySelector(".bg-gradient-image");
-        if (!image) return;
+        var hero = document.querySelector(".hero");
+        var sections = document.querySelectorAll(".copy-section");
 
-        var maxOffset = 80; // px
-        var factor = -0.08; // negative so background drifts up slightly on scroll
+        if (image) {
+          var maxOffset = 160; // px
+          var factor = -0.18; // stronger background drift on scroll
 
-        function onScroll() {
-          var scrollY = window.scrollY || window.pageYOffset || 0;
-          var offset = scrollY * factor;
+          function onScroll() {
+            var scrollY = window.scrollY || window.pageYOffset || 0;
+            var offset = scrollY * factor;
 
-          if (offset > maxOffset) offset = maxOffset;
-          if (offset < -maxOffset) offset = -maxOffset;
+            if (offset > maxOffset) offset = maxOffset;
+            if (offset < -maxOffset) offset = -maxOffset;
 
-          image.style.transform =
-            "translate3d(-50%, " + offset.toFixed(2) + "px, 0)";
+            image.style.transform =
+              "translate3d(-50%, " + offset.toFixed(2) + "px, 0)";
+
+            if (hero) {
+              var heroHeight = hero.offsetHeight || window.innerHeight || 1;
+              var progress = scrollY / heroHeight;
+              if (progress < 0) progress = 0;
+              if (progress > 1) progress = 1;
+
+              var translateY = -40 * progress; // px, hero drifts slightly up
+              var scale = 1 - 0.04 * progress; // small scale down
+              var opacity = 1 - 0.35 * progress; // fade out slightly
+
+              hero.style.transform =
+                "translate3d(0, " +
+                translateY.toFixed(2) +
+                "px, 0) scale(" +
+                scale.toFixed(3) +
+                ")";
+              hero.style.opacity = opacity.toFixed(3);
+            }
+          }
+
+          window.addEventListener("scroll", onScroll, { passive: true });
+          onScroll();
         }
 
-        window.addEventListener("scroll", onScroll, { passive: true });
-        onScroll();
+        if ("IntersectionObserver" in window && sections.length) {
+          var observer = new IntersectionObserver(
+            function (entries) {
+              entries.forEach(function (entry) {
+                if (entry.isIntersecting) {
+                  entry.target.classList.add("copy-section--visible");
+                  observer.unobserve(entry.target);
+                }
+              });
+            },
+            { threshold: 0.3 }
+          );
+
+          sections.forEach(function (section) {
+            observer.observe(section);
+          });
+        } else {
+          sections.forEach(function (section) {
+            section.classList.add("copy-section--visible");
+          });
+        }
       })();
     </script>
   </body>
