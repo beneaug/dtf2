@@ -115,6 +115,8 @@ body {
 .bg-grain-overlay {
   position: absolute;
   inset: 0;
+  /* Dark base so the grain reads clearly, even where the gradient is softer */
+  background-color: #050608;
   background-image: url("https://lovable.dev/_next/static/media/grain.1ccdda41.png");
   background-size: 100px 100px;
   background-repeat: repeat;
