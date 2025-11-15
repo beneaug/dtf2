@@ -104,10 +104,10 @@ body {
 }
 
 @media (max-width: 767px) {
-  /* On mobile, update the gradient position without CSS transitions to
-     avoid jitter during fast scroll / flick gestures. */
+  /* On mobile, keep a shorter, transform-only transition so the return
+     from the docked state feels smooth without heavy repaint cost. */
   .bg-gradient-image {
-    transition: none;
+    transition: transform 450ms cubic-bezier(0.22, 0.61, 0.36, 1);
   }
 }
 
