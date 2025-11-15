@@ -536,6 +536,16 @@
               const index = viewBtn.getAttribute("data-file-index") || "0";
               if (!orderId) return;
               try {
+                // Open a placeholder window immediately so browsers treat this
+                // as a direct user-initiated popup and don't block it.
+                const downloadWindow = window.open("", "_blank", "noopener");
+                if (!downloadWindow) {
+                  alert(
+                    "Your browser blocked the artwork window. Please allow pop-ups for this site."
+                  );
+                  return;
+                }
+
                 const res = await opsFetch(
                   `/api/operator/file?orderId=${orderId}&index=${index}`
                 );
@@ -543,9 +553,15 @@
                 if (!res.ok || !data.ok || !data.url) {
                   throw new Error(data.error || "Failed to open file.");
                 }
-                window.open(data.url, "_blank", "noopener");
+                downloadWindow.location = data.url;
               } catch (err) {
                 console.error(err);
+                try {
+                  // If we created a window and something went wrong, close it.
+                  if (typeof downloadWindow !== "undefined" && downloadWindow) {
+                    downloadWindow.close();
+                  }
+                } catch {}
                 alert("Failed to open artwork file.");
               }
               return;
