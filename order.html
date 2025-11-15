@@ -197,6 +197,40 @@
     </main>
   </div>
   <script src="order.js"></script>
+  <script>
+    (function () {
+      var image = document.querySelector(".bg-gradient-image");
+      if (!image) return;
+
+      function updateOrderGradientMobile() {
+        var vw =
+          window.innerWidth || document.documentElement.clientWidth || 0;
+        var vh =
+          window.innerHeight || document.documentElement.clientHeight || 0;
+
+        if (vw >= 768 || vh === 0) {
+          // On tablet/desktop, fall back to the base CSS-defined state.
+          image.style.removeProperty("--gradient-y");
+          image.style.removeProperty("--gradient-scale");
+          image.style.removeProperty("--gradient-offset-x");
+          return;
+        }
+
+        // Match the home page's mobile hero starting state:
+        // blob pushed well below the viewport and heavily zoomed in.
+        var heroY = 1.05 * vh;
+        var heroScale = 2.4;
+
+        image.style.setProperty("--gradient-y", heroY.toFixed(2) + "px");
+        image.style.setProperty("--gradient-scale", heroScale.toFixed(3));
+        image.style.setProperty("--gradient-offset-x", "0px");
+      }
+
+      window.addEventListener("resize", updateOrderGradientMobile);
+      window.addEventListener("orientationchange", updateOrderGradientMobile);
+      updateOrderGradientMobile();
+    })();
+  </script>
   </body>
 </html>
 
