@@ -17,6 +17,23 @@ document.addEventListener("DOMContentLoaded", () => {
   const qtySummaryEl = form.querySelector(".order-summary-qty");
   const totalSummaryEl = form.querySelector(".order-summary-total");
   const artSizeEl = form.querySelector(".order-summary-art-size");
+  const bannerEl = document.getElementById("order-banner");
+  // Success / cancel message based on querystring
+  if (bannerEl) {
+    const params = new URLSearchParams(window.location.search);
+    const isSuccess = params.get("success") === "1";
+    const isCanceled = params.get("canceled") === "1";
+
+    if (isSuccess) {
+      bannerEl.textContent =
+        "Thanks — your DTF order is in the queue. You'll receive a Stripe receipt shortly.";
+      bannerEl.classList.add("order-banner--success");
+    } else if (isCanceled) {
+      bannerEl.textContent =
+        "Payment was canceled. No charge was made. You can update your details and try again.";
+      bannerEl.classList.add("order-banner--error");
+    }
+  }
 
   // Configurable endpoint so you can point this at your real backend later.
   const ORDERS_ENDPOINT =

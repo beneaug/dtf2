@@ -3,14 +3,8 @@
 // It still omits full error handling and hard limits, so treat it as a starting point.
 
 const Busboy = require("busboy");
-const { Pool } = require("pg");
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const Stripe = require("stripe");
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 3,
-});
 
 const s3 = new S3Client({
   region: process.env.AWS_S3_REGION,
@@ -78,111 +72,79 @@ module.exports = (req, res) => {
     try {
       const uploadedFiles = await Promise.all(fileUploads);
 
-      const client = await pool.connect();
-      try {
-        const quantity = parseInt(fields.quantity, 10) || 1;
-        const mode = fields.mode || "single-image";
-        const size = fields.size || null;
-        const transferName = fields.transferName || null;
-        const garmentColor = fields.garmentColor || null;
-        const notes = fields.notes || null;
+      const quantity = parseInt(fields.quantity, 10) || 1;
+      const mode = fields.mode || "single-image";
+      const size = fields.size || null;
+      const transferName = fields.transferName || null;
+      const garmentColor = fields.garmentColor || null;
+      const notes = fields.notes || null;
 
-        const unitPrice = fields.unitPrice ? parseFloat(fields.unitPrice) : null;
-        const totalPrice = fields.totalPrice
-          ? parseFloat(fields.totalPrice)
+      const unitPrice = fields.unitPrice ? parseFloat(fields.unitPrice) : null;
+      const totalPrice = fields.totalPrice
+        ? parseFloat(fields.totalPrice)
+        : null;
+      const unitPriceCents =
+        Number.isFinite(unitPrice) && unitPrice >= 0
+          ? Math.round(unitPrice * 100)
           : null;
-        const unitPriceCents =
-          Number.isFinite(unitPrice) && unitPrice >= 0
-            ? Math.round(unitPrice * 100)
-            : null;
-        const totalPriceCents =
-          Number.isFinite(totalPrice) && totalPrice >= 0
-            ? Math.round(totalPrice * 100)
-            : null;
+      const totalPriceCents =
+        Number.isFinite(totalPrice) && totalPrice >= 0
+          ? Math.round(totalPrice * 100)
+          : null;
 
-        // Example table:
-        // CREATE TABLE dtf_orders (
-        //   id serial PRIMARY KEY,
-        //   created_at timestamptz DEFAULT now(),
-        //   mode text,
-        //   size text,
-        //   quantity integer,
-        //   transfer_name text,
-        //   garment_color text,
-        //   notes text,
-        //   files jsonb,
-        //   unit_price_cents integer,
-        //   total_price_cents integer
-        // );
-
-        const result = await client.query(
-          `INSERT INTO dtf_orders
-           (mode, size, quantity, transfer_name, garment_color, notes, files,
-            unit_price_cents, total_price_cents)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-           RETURNING id, created_at`,
-          [
+      let checkoutUrl = null;
+      if (stripe && totalPriceCents && totalPriceCents > 0) {
+        const origin = (req.headers.origin || "").replace(/\/$/, "");
+        const session = await stripe.checkout.sessions.create({
+          mode: "payment",
+          payment_method_types: ["card"],
+          line_items: [
+            {
+              price_data: {
+                currency: "usd",
+                product_data: {
+                  name:
+                    transferName ||
+                    "DTF transfer order",
+                },
+                unit_amount:
+                  unitPriceCents ||
+                  Math.max(1, Math.round(totalPriceCents / quantity)),
+              },
+              quantity,
+            },
+          ],
+          metadata: {
             mode,
             size,
-            quantity,
-            transferName,
-            garmentColor,
-            notes,
-            JSON.stringify(uploadedFiles),
-            unitPriceCents,
-            totalPriceCents,
-          ]
-        );
-
-        const order = result.rows[0];
-
-        let checkoutUrl = null;
-        if (stripe && totalPriceCents && totalPriceCents > 0) {
-          const session = await stripe.checkout.sessions.create({
-            mode: "payment",
-            payment_method_types: ["card"],
-            line_items: [
-              {
-                price_data: {
-                  currency: "usd",
-                  product_data: {
-                    name:
-                      transferName ||
-                      `DTF transfer order #${order.id}`,
-                  },
-                  // charge per transfer, quantity is number of transfers
-                  unit_amount:
-                    unitPriceCents || Math.max(1, Math.round(totalPriceCents / quantity)),
-                },
-                quantity,
-              },
-            ],
-            metadata: {
-              order_id: order.id.toString(),
-            },
-            success_url:
-              process.env.STRIPE_SUCCESS_URL ||
-              `${(req.headers.origin || "").replace(/\/$/, "")}/order.html?success=1&orderId=${order.id}`,
-            cancel_url:
-              process.env.STRIPE_CANCEL_URL ||
-              `${(req.headers.origin || "").replace(/\/$/, "")}/order.html?canceled=1`,
-          });
-          checkoutUrl = session.url;
-        }
-
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "application/json");
-        return res.end(
-          JSON.stringify({
-            ok: true,
-            orderId: order.id,
-            createdAt: order.created_at,
-            checkoutUrl,
-          })
-        );
-      } finally {
-        client.release();
+            quantity: String(quantity),
+            transferName: transferName || "",
+            garmentColor: garmentColor || "",
+            notes: notes || "",
+            files: JSON.stringify(uploadedFiles),
+            unitPriceCents:
+              unitPriceCents != null ? String(unitPriceCents) : "",
+            totalPriceCents:
+              totalPriceCents != null ? String(totalPriceCents) : "",
+          },
+          success_url:
+            process.env.STRIPE_SUCCESS_URL ||
+            `${origin}/order?success=1&session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url:
+            process.env.STRIPE_CANCEL_URL ||
+            `${origin}/order?canceled=1`,
+        });
+        checkoutUrl = session.url;
       }
+
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/json");
+      return res.end(
+        JSON.stringify({
+          ok: true,
+          checkoutUrl,
+        })
+      );
     } catch (err) {
       console.error(err);
       res.statusCode = 500;

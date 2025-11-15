@@ -204,6 +204,7 @@ body {
   text-transform: uppercase;
   font-weight: 600;
   cursor: pointer;
+  text-decoration: none;
   transition: border-color 160ms ease-out, color 160ms ease-out,
     background-color 160ms ease-out, transform 160ms ease-out;
 }
@@ -217,6 +218,12 @@ body {
 .order-now-btn:active {
   transform: translateY(0);
   background-color: rgba(255, 255, 255, 0.08);
+}
+
+.order-now-btn:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 3px;
+  text-decoration: none;
 }
 
 /* ---- Order page ---- */
@@ -247,6 +254,19 @@ body {
   margin: 0;
   color: #dcdcdc;
   line-height: 1.7;
+}
+
+.order-banner {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+}
+
+.order-banner--success {
+  color: #9ef7c5;
+}
+
+.order-banner--error {
+  color: #ffb8b8;
 }
 
 .order-shell {
@@ -558,6 +578,102 @@ body {
 .order-disclaimer {
   font-size: 0.78rem;
   color: #9a9a9a;
+}
+
+/* ---- Operator backend (ops.html / backend.html) ---- */
+
+.ops-subheading {
+  font-size: 1.2rem;
+  margin: 0 0 1.4rem;
+  font-weight: 600;
+}
+
+.ops-table-wrapper {
+  margin-top: 0.5rem;
+  border-radius: 1rem;
+  background: rgba(0, 0, 0, 0.25);
+  overflow: auto;
+  max-height: 26rem;
+}
+
+.ops-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.ops-table th,
+.ops-table td {
+  padding: 0.6rem 0.9rem;
+  white-space: nowrap;
+}
+
+.ops-table th {
+  text-align: left;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #bbbbc5;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ops-table td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ops-table tr:last-child td {
+  border-bottom: none;
+}
+
+.ops-table td:nth-child(1),
+.ops-table td:nth-child(4) {
+  text-align: right;
+}
+
+.ops-table td:nth-child(3),
+.ops-table td:nth-child(5),
+.ops-table td:nth-child(6),
+.ops-table td:nth-child(7),
+.ops-table td:nth-child(8),
+.ops-table td:nth-child(9) {
+  white-space: normal;
+}
+
+.ops-table td:nth-child(7),
+.ops-table td:nth-child(8) {
+  max-width: 220px;
+}
+
+.ops-table tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.ops-mark-complete {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  padding: 0.25rem 0.8rem;
+  background: transparent;
+  color: #f5f5f5;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ops-mark-complete:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ops-mark-complete:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.ops-mark-complete:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 2px;
 }
 
 .copy-section h2 {
