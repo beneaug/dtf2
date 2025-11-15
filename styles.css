@@ -41,7 +41,7 @@ body {
   width: 100%;
   overflow: hidden;
   /* Dark grey base so the gradient always sits on a soft, grainy black */
-  background-color: #050608;
+  background-color: #262626;
   pointer-events: none;
 }
 
