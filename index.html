@@ -209,6 +209,12 @@
             gradientConfig.returnStart + returnRange
           );
           gradientConfig.scrollMax = scrollMax;
+
+          // Ensure the initial visual state matches the configured hero/dock
+          // settings on first load and after resizes.
+          targetScrollY = window.scrollY || window.pageYOffset || 0;
+          smoothedScrollY = targetScrollY;
+          applyScrollEffects(targetScrollY);
         }
 
         function clamp01(v) {
