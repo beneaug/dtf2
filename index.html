@@ -164,9 +164,9 @@
             // Start with the blob far below the viewport and heavily zoomed in,
             // then shrink toward the second text element, and finally grow back
             // to a huge state so the page keeps a consistent gradient background.
-            gradientConfig.heroY = 1.05 * vh; // slightly further up from the very bottom
+            gradientConfig.heroY = 1.05 * vh; // center well below initial viewport
             gradientConfig.dockY = gradientConfig.heroY; // anchor vertically; scale does the work
-            gradientConfig.heroScale = 2.4; // slightly larger starting blob on mobile
+            gradientConfig.heroScale = 2.1; // slightly reduced so the return feels less abrupt
             gradientConfig.dockScale = 0.776; // ~3% smaller than 0.8 for a tighter dock
 
             if (headingRect) {
@@ -193,7 +193,13 @@
             gradientConfig.returnStart = scrollMax * 0.55;
           } else if (vw < 768) {
             // On mobile, stretch the return over a longer range for a more graceful feel
-            gradientConfig.returnStart = scrollMax * 0.5;
+            // and ensure there's a clear gap between the dock point and the start of return.
+            var minGap = vh * 0.4;
+            var candidateStart = gradientConfig.toDockEnd + minGap;
+            gradientConfig.returnStart = Math.min(
+              candidateStart,
+              scrollMax * 0.5
+            );
           }
           gradientConfig.returnEnd = scrollMax;
           gradientConfig.scrollMax = scrollMax;

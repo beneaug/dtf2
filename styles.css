@@ -24,6 +24,7 @@ body {
   min-height: 100vh;
   width: 100%;
   overflow: hidden;
+  /* Subtle charcoal base under gradient + grain to make the texture pop */
   background-color: #050608;
 }
 
@@ -41,6 +42,8 @@ body {
   width: 100%;
   overflow: hidden;
   pointer-events: none;
+  /* Slightly darken under the gradient layer as well */
+  background-color: #050608;
 }
 
 .bg-gradient-wrapper {
