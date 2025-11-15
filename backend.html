@@ -59,26 +59,28 @@
             </div>
 
             <div id="ops-orders" style="display: none">
-              <h2 class="ops-subheading">Pending & recent orders</h2>
+              <h2 class="ops-subheading">Pending &amp; recent orders</h2>
               <div class="order-status" id="ops-orders-status"></div>
-              <div class="ops-table-wrapper">
-                <table class="ops-table">
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Created</th>
-                      <th>Size</th>
-                      <th>Qty</th>
-                      <th>Name</th>
-                      <th>Garment</th>
-                      <th>Notes</th>
-                      <th>Files</th>
-                      <th>Status</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody id="ops-table-body"></tbody>
-                </table>
+
+              <div class="ops-layout">
+                <section class="ops-list-column" aria-label="Order queue">
+                  <div class="ops-order-list" id="ops-order-list"></div>
+                </section>
+
+                <aside
+                  class="ops-detail-column"
+                  aria-label="Order details"
+                  id="ops-detail-column"
+                >
+                  <div
+                    class="ops-detail-placeholder"
+                    id="ops-detail-placeholder"
+                  >
+                    Select an order to see full job specs, artwork, and
+                    downloads.
+                  </div>
+                  <div class="ops-detail-card" id="ops-detail" hidden></div>
+                </aside>
               </div>
             </div>
           </div>
@@ -103,11 +105,338 @@
         el.textContent = text;
       }
 
+      const OPS_THUMBNAIL_CACHE = {};
+      let OPS_CURRENT_ORDERS = [];
+
+      function addBusinessDays(date, businessDays) {
+        const result = new Date(date.getTime());
+        let added = 0;
+        while (added < businessDays) {
+          result.setDate(result.getDate() + 1);
+          const day = result.getDay();
+          if (day !== 0 && day !== 6) {
+            added++;
+          }
+        }
+        return result;
+      }
+
+      function formatShortDateTime(date) {
+        return `${date.toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+        })} · ${date.toLocaleTimeString(undefined, {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}`;
+      }
+
+      function formatShortDate(date) {
+        return date.toLocaleDateString(undefined, {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+        });
+      }
+
+      function formatMoneyFromCents(cents) {
+        if (cents == null || Number.isNaN(cents)) return null;
+        return `$${(cents / 100).toFixed(2)}`;
+      }
+
+      async function loadThumbnail(order, thumbContainer, size = "small") {
+        if (!thumbContainer) return;
+
+        const files = Array.isArray(order.files) ? order.files : [];
+        if (!files.length) {
+          thumbContainer.innerHTML =
+            '<div class="ops-order-thumb-empty">No art</div>';
+          return;
+        }
+
+        const imageIndex =
+          files.findIndex(
+            (f) => f && typeof f.mimetype === "string" && f.mimetype.startsWith("image/")
+          ) || 0;
+
+        const cacheKey = `${order.id}:${imageIndex}`;
+        if (OPS_THUMBNAIL_CACHE[cacheKey]) {
+          const img = document.createElement("img");
+          img.src = OPS_THUMBNAIL_CACHE[cacheKey];
+          img.alt = files[imageIndex].filename || "Artwork";
+          thumbContainer.innerHTML = "";
+          thumbContainer.appendChild(img);
+          return;
+        }
+
+        try {
+          const res = await opsFetch(
+            `/api/operator/file?orderId=${order.id}&index=${imageIndex}`
+          );
+          const data = await res.json();
+          if (!res.ok || !data.ok || !data.url) {
+            throw new Error(data.error || "Failed to load artwork thumbnail.");
+          }
+          OPS_THUMBNAIL_CACHE[cacheKey] = data.url;
+          const img = document.createElement("img");
+          img.src = data.url;
+          img.alt = files[imageIndex].filename || "Artwork";
+          thumbContainer.innerHTML = "";
+          thumbContainer.appendChild(img);
+        } catch (err) {
+          console.error(err);
+          thumbContainer.innerHTML =
+            '<div class="ops-order-thumb-empty">Artwork unavailable</div>';
+        }
+      }
+
+      function renderOrderDetail(order) {
+        const detailEl = document.getElementById("ops-detail");
+        const placeholderEl = document.getElementById("ops-detail-placeholder");
+        if (!detailEl || !placeholderEl || !order) return;
+
+        const created = new Date(order.created_at);
+        const due = addBusinessDays(created, 3);
+        const now = new Date();
+        const isOverdue =
+          order.status !== "completed" &&
+          due.getTime() < now.getTime() - 5 * 60 * 1000;
+
+        const unitPrice = formatMoneyFromCents(order.unit_price_cents);
+        const totalPrice = formatMoneyFromCents(order.total_price_cents);
+        const files = Array.isArray(order.files) ? order.files : [];
+
+        const statusLower = (order.status || "pending").toLowerCase();
+
+        detailEl.innerHTML = `
+          <header class="ops-detail-header">
+            <div class="ops-detail-title-group">
+              <h3 class="ops-detail-title">${order.transfer_name || "Untitled job"}</h3>
+              <p class="ops-detail-subtitle">
+                Job #${order.id} · ${
+                  order.garment_color || "Garment color not specified"
+                }
+              </p>
+            </div>
+            <div class="ops-detail-badges">
+              <span class="ops-status-pill ops-status-pill--${statusLower}">
+                ${statusLower}
+              </span>
+            </div>
+          </header>
+
+          <section class="ops-detail-art-section">
+            <div class="ops-detail-art" id="ops-detail-art-${order.id}">
+              <div class="ops-order-thumb-empty">Loading artwork…</div>
+            </div>
+            <div class="ops-detail-dates">
+              <div class="ops-detail-date-row">
+                <span class="ops-detail-label">Received</span>
+                <span class="ops-detail-value">${formatShortDateTime(
+                  created
+                )}</span>
+              </div>
+              <div class="ops-detail-date-row">
+                <span class="ops-detail-label">Due (3 business days)</span>
+                <span class="ops-detail-value">
+                  ${formatShortDate(due)}${
+          isOverdue ? ' · <span class="ops-detail-overdue">Overdue</span>' : ""
+        }
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <section class="ops-detail-grid" aria-label="Job details">
+            <div class="ops-detail-grid-item">
+              <span class="ops-detail-label">Quantity</span>
+              <span class="ops-detail-value">${order.quantity || "—"}</span>
+            </div>
+            <div class="ops-detail-grid-item">
+              <span class="ops-detail-label">Transfer size</span>
+              <span class="ops-detail-value">${order.size || "—"}</span>
+            </div>
+            <div class="ops-detail-grid-item">
+              <span class="ops-detail-label">Mode</span>
+              <span class="ops-detail-value">${order.mode || "—"}</span>
+            </div>
+            <div class="ops-detail-grid-item">
+              <span class="ops-detail-label">Pricing</span>
+              <span class="ops-detail-value">
+                ${
+                  unitPrice && totalPrice
+                    ? `${unitPrice} per · ${totalPrice} total`
+                    : "Not recorded"
+                }
+              </span>
+            </div>
+          </section>
+
+          <section class="ops-detail-notes">
+            <h4 class="ops-detail-section-heading">Operator notes</h4>
+            <p class="ops-detail-notes-body">
+              ${order.notes ? order.notes : "No notes supplied with this job."}
+            </p>
+          </section>
+
+          <section class="ops-detail-files">
+            <div class="ops-detail-files-header">
+              <h4 class="ops-detail-section-heading">Artwork &amp; files</h4>
+              <span class="ops-detail-files-count">${
+                files.length ? `${files.length} file${files.length === 1 ? "" : "s"}` : "No files"
+              }</span>
+            </div>
+            <div class="ops-detail-files-list">
+              ${
+                files.length
+                  ? files
+                      .map((file, index) => {
+                        const isImage =
+                          file &&
+                          typeof file.mimetype === "string" &&
+                          file.mimetype.startsWith("image/");
+                        return `
+                          <div class="ops-file-row">
+                            <div class="ops-file-main">
+                              <div class="ops-file-name">${
+                                file.filename || `File ${index + 1}`
+                              }</div>
+                              <div class="ops-file-meta">
+                                ${isImage ? "Image" : "File"} · ${
+                          file.mimetype || "Unknown type"
+                        }${
+                          file.size
+                            ? ` · ${(file.size / 1024).toFixed(1)} KB`
+                            : ""
+                        }
+                              </div>
+                            </div>
+                            <div class="ops-file-actions">
+                              <button
+                                type="button"
+                                class="ops-view-file"
+                                data-order-id="${order.id}"
+                                data-file-index="${index}"
+                              >
+                                Open
+                              </button>
+                            </div>
+                          </div>
+                        `;
+                      })
+                      .join("")
+                  : `<p class="ops-detail-notes-body">No artwork files are attached to this order.</p>`
+              }
+            </div>
+          </section>
+        `;
+
+        placeholderEl.style.display = "none";
+        detailEl.hidden = false;
+
+        const artContainer = document.getElementById(
+          `ops-detail-art-${order.id}`
+        );
+        if (artContainer) {
+          loadThumbnail(order, artContainer, "large");
+        }
+      }
+
+      function renderOrderList(orders) {
+        const listEl = document.getElementById("ops-order-list");
+        const statusEl = document.getElementById("ops-orders-status");
+        if (!listEl || !statusEl) return;
+
+        const pending = orders.filter((o) => o.status === "pending").length;
+        setText(
+          statusEl,
+          pending
+            ? `${pending} pending ${pending === 1 ? "job" : "jobs"}`
+            : "No pending jobs."
+        );
+
+        listEl.innerHTML = "";
+
+        orders.forEach((order, index) => {
+          const files = Array.isArray(order.files) ? order.files : [];
+          const created = new Date(order.created_at);
+          const due = addBusinessDays(created, 3);
+          const statusLower = (order.status || "pending").toLowerCase();
+
+          const row = document.createElement("div");
+          row.className = "ops-order-row";
+          row.setAttribute("data-order-id", String(order.id));
+          if (index === 0) {
+            row.classList.add("ops-order-row--selected");
+          }
+
+          row.innerHTML = `
+            <div class="ops-order-thumb" data-thumb-for="${order.id}">
+              ${
+                files.length
+                  ? '<div class="ops-order-thumb-empty">Loading…</div>'
+                  : '<div class="ops-order-thumb-empty">No art</div>'
+              }
+            </div>
+            <div class="ops-order-main">
+              <div class="ops-order-top-row">
+                <div class="ops-order-job">${
+                  order.transfer_name || "Untitled job"
+                }</div>
+                <div class="ops-order-due">
+                  <span class="ops-pill ops-pill--muted">
+                    #${order.id}
+                  </span>
+                </div>
+              </div>
+              <div class="ops-order-meta">
+                <span class="ops-pill ops-pill--soft">
+                  Received · ${formatShortDateTime(created)}
+                </span>
+                <span class="ops-pill ops-pill--due">
+                  Due · ${formatShortDate(due)} (3 business days)
+                </span>
+              </div>
+              <div class="ops-order-quickline">
+                ${order.quantity || "—"} × ${order.size || "size n/a"} · ${
+            order.garment_color || "garment color n/a"
+          }
+              </div>
+            </div>
+            <div class="ops-order-actions">
+              <span class="ops-status-pill ops-status-pill--${statusLower}">
+                ${statusLower}
+              </span>
+              <button
+                type="button"
+                class="ops-mark-complete"
+                data-order-id="${order.id}"
+                ${order.status === "completed" ? "disabled" : ""}
+              >
+                Mark completed
+              </button>
+            </div>
+          `;
+
+          listEl.appendChild(row);
+
+          const thumb = row.querySelector(
+            '.ops-order-thumb[data-thumb-for="' + order.id + '"]'
+          );
+          if (thumb) {
+            loadThumbnail(order, thumb);
+          }
+        });
+
+        if (orders.length) {
+          renderOrderDetail(orders[0]);
+        }
+      }
+
       async function loadOrders() {
         const ordersPanel = document.getElementById("ops-orders");
         const loginPanel = document.getElementById("ops-login");
         const statusEl = document.getElementById("ops-orders-status");
-        const tbody = document.getElementById("ops-table-body");
         try {
           setText(statusEl, "Loading orders…");
           const res = await opsFetch("/api/operator/orders");
@@ -116,60 +445,8 @@
 
           loginPanel.style.display = "none";
           ordersPanel.style.display = "";
-          const pending = data.orders.filter(
-            (o) => o.status === "pending"
-          ).length;
-          setText(
-            statusEl,
-            pending
-              ? `${pending} pending ${pending === 1 ? "job" : "jobs"}`
-              : "No pending jobs."
-          );
-
-          tbody.innerHTML = "";
-          data.orders.forEach((order) => {
-            const tr = document.createElement("tr");
-            const files = Array.isArray(order.files) ? order.files : [];
-            const fileCount = files.length;
-            const firstFile = files[0];
-            const fileLabel =
-              fileCount === 0
-                ? "–"
-                : fileCount === 1
-                ? firstFile.filename || firstFile.key
-                : `${fileCount} files`;
-
-            tr.innerHTML = `
-              <td>${order.id}</td>
-              <td>${new Date(order.created_at).toLocaleString()}</td>
-              <td><strong>${order.size || ""}</strong></td>
-              <td><strong>${order.quantity || ""}</strong></td>
-              <td>${order.transfer_name || ""}</td>
-              <td>${order.garment_color || ""}</td>
-              <td>${order.notes || ""}</td>
-              <td>
-                ${fileLabel}
-                ${
-                  fileCount
-                    ? `<button class="ops-view-file" data-order-id="${
-                        order.id
-                      }" data-file-index="0">View</button>`
-                    : ""
-                }
-              </td>
-              <td>${order.status || ""}</td>
-              <td>
-                <button
-                  class="ops-mark-complete"
-                  data-order-id="${order.id}"
-                  ${order.status === "completed" ? "disabled" : ""}
-                >
-                  Mark completed
-                </button>
-              </td>
-            `;
-            tbody.appendChild(tr);
-          });
+          OPS_CURRENT_ORDERS = data.orders || [];
+          renderOrderList(OPS_CURRENT_ORDERS);
         } catch (err) {
           console.error(err);
           if (err.message === "unauthorized") {
@@ -221,7 +498,7 @@
         });
 
         document
-          .getElementById("ops-table-body")
+          .getElementById("ops-order-list")
           .addEventListener("click", async (event) => {
             const viewBtn = event.target.closest(".ops-view-file");
             if (viewBtn) {
@@ -245,31 +522,50 @@
             }
 
             const btn = event.target.closest(".ops-mark-complete");
-            if (!btn) return;
+            if (btn) {
+              const orderId = btn.getAttribute("data-order-id");
+              if (!orderId) return;
 
-            const orderId = btn.getAttribute("data-order-id");
-            if (!orderId) return;
-
-            btn.disabled = true;
-            try {
-              const res = await opsFetch("/api/operator/orders", {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  orderId: Number(orderId),
-                  status: "completed",
-                }),
-              });
-              const data = await res.json();
-              if (!res.ok || !data.ok) {
-                throw new Error(data.error || "Failed to update order.");
+              btn.disabled = true;
+              try {
+                const res = await opsFetch("/api/operator/orders", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    orderId: Number(orderId),
+                    status: "completed",
+                  }),
+                });
+                const data = await res.json();
+                if (!res.ok || !data.ok) {
+                  throw new Error(data.error || "Failed to update order.");
+                }
+                await loadOrders();
+              } catch (err) {
+                console.error(err);
+                btn.disabled = false;
+                alert("Failed to mark order as completed.");
               }
-              await loadOrders();
-            } catch (err) {
-              console.error(err);
-              btn.disabled = false;
-              alert("Failed to mark order as completed.");
+              return;
             }
+
+            const row = event.target.closest(".ops-order-row");
+            if (!row) return;
+            const idStr = row.getAttribute("data-order-id");
+            if (!idStr) return;
+
+            const orderIdNum = Number(idStr);
+            const order = OPS_CURRENT_ORDERS.find(
+              (o) => Number(o.id) === orderIdNum
+            );
+            if (!order) return;
+
+            document
+              .querySelectorAll(".ops-order-row--selected")
+              .forEach((el) => el.classList.remove("ops-order-row--selected"));
+            row.classList.add("ops-order-row--selected");
+
+            renderOrderDetail(order);
           });
 
         loadOrders();

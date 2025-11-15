@@ -54,7 +54,10 @@ async function handleGet(req, res) {
          garment_color,
          notes,
          files,
-         status
+         status,
+         unit_price_cents,
+         total_price_cents,
+         stripe_session_id
        FROM dtf_orders
        ORDER BY created_at DESC
        LIMIT 100`
