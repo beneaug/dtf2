@@ -63,27 +63,26 @@
             <button class="order-tab" type="button">Upload sheet</button>
           </div>
 
-          <div class="order-upload">
-            <label class="order-upload-drop">
-              <span class="order-upload-icon">⬆︎</span>
-              <span class="order-upload-title">Upload artwork</span>
-              <span class="order-upload-sub">
-                Drag &amp; drop a file here, or click to browse.
-              </span>
-              <input
-                class="order-upload-input"
-                type="file"
-                name="artwork"
-                accept=".jpg,.jpeg,.png,.gif,.bmp,.eps,.pdf,.ai,.svg,.psd,.tif,.tiff"
-              />
-            </label>
-            <div class="order-upload-preview" aria-hidden="true"></div>
-            <p class="order-upload-meta">
-              Supports: JPG, PNG, GIF, BMP, EPS, PDF, AI, SVG, PSD, TIF, TIFF
-            </p>
-          </div>
-
-          <form class="order-form" action="#" method="post" novalidate>
+          <form id="order-form" class="order-form" action="#" method="post" novalidate>
+            <div class="order-upload">
+              <label class="order-upload-drop">
+                <span class="order-upload-icon">⬆︎</span>
+                <span class="order-upload-title">Upload artwork</span>
+                <span class="order-upload-sub">
+                  Drag &amp; drop a file here, or click to browse.
+                </span>
+                <input
+                  class="order-upload-input"
+                  type="file"
+                  name="artwork"
+                  accept=".jpg,.jpeg,.png,.gif,.bmp,.eps,.pdf,.ai,.svg,.psd,.tif,.tiff"
+                />
+              </label>
+              <div class="order-upload-preview" aria-hidden="true"></div>
+              <p class="order-upload-meta">
+                Supports: JPG, PNG, GIF, BMP, EPS, PDF, AI, SVG, PSD, TIF, TIFF
+              </p>
+            </div>
             <div class="order-grid">
               <label class="order-field">
                 <span class="order-field-label">Size</span>
