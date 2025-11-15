@@ -119,6 +119,10 @@
           scrollMax: 1
         };
 
+        var isMobileViewport = false;
+        var targetScrollY = 0;
+        var smoothedScrollY = 0;
+
         function recalcGradientBounds() {
           if (!hero || !secondSection) return;
           var heroHeight = hero.offsetHeight || window.innerHeight || 1;
@@ -135,6 +139,8 @@
             doc.offsetHeight
           );
           var scrollMax = scrollHeight - vh;
+
+          isMobileViewport = vw < 768;
 
           // Responsive dock + hero positions based on viewport so the effect
           // stays visually consistent across desktop and mobile.
@@ -221,9 +227,7 @@
           return 1 - Math.pow(1 - x, 3);
         }
 
-        function onScroll() {
-          var scrollY = window.scrollY || window.pageYOffset || 0;
-
+        function applyScrollEffects(scrollY) {
           if (image && secondSection) {
             var y, scale, offsetX;
 
@@ -297,6 +301,25 @@
           }
         }
 
+        function onScroll() {
+          targetScrollY = window.scrollY || window.pageYOffset || 0;
+          if (!isMobileViewport) {
+            applyScrollEffects(targetScrollY);
+          }
+        }
+
+        function mobileAnimationLoop() {
+          if (isMobileViewport) {
+            var diff = targetScrollY - smoothedScrollY;
+            if (Math.abs(diff) > 0.1) {
+              // Lerp toward the real scroll position for smoother, less "strained" motion
+              smoothedScrollY += diff * 0.2;
+              applyScrollEffects(smoothedScrollY);
+            }
+          }
+          window.requestAnimationFrame(mobileAnimationLoop);
+        }
+
         recalcGradientBounds();
         window.addEventListener("scroll", onScroll, { passive: true });
         window.addEventListener("resize", function () {
@@ -304,6 +327,7 @@
           onScroll();
         });
         onScroll();
+        mobileAnimationLoop();
 
         if ("IntersectionObserver" in window && sections.length) {
           var observer = new IntersectionObserver(
