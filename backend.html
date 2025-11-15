@@ -116,24 +116,47 @@
 
           loginPanel.style.display = "none";
           ordersPanel.style.display = "";
-          setText(statusEl, "");
+          const pending = data.orders.filter(
+            (o) => o.status === "pending"
+          ).length;
+          setText(
+            statusEl,
+            pending
+              ? `${pending} pending ${pending === 1 ? "job" : "jobs"}`
+              : "No pending jobs."
+          );
 
           tbody.innerHTML = "";
           data.orders.forEach((order) => {
             const tr = document.createElement("tr");
             const files = Array.isArray(order.files) ? order.files : [];
-            const fileCell =
-              files.map((f) => f.filename || f.key).join(", ") || "–";
+            const fileCount = files.length;
+            const firstFile = files[0];
+            const fileLabel =
+              fileCount === 0
+                ? "–"
+                : fileCount === 1
+                ? firstFile.filename || firstFile.key
+                : `${fileCount} files`;
 
             tr.innerHTML = `
               <td>${order.id}</td>
               <td>${new Date(order.created_at).toLocaleString()}</td>
-              <td>${order.size || ""}</td>
-              <td>${order.quantity || ""}</td>
+              <td><strong>${order.size || ""}</strong></td>
+              <td><strong>${order.quantity || ""}</strong></td>
               <td>${order.transfer_name || ""}</td>
               <td>${order.garment_color || ""}</td>
               <td>${order.notes || ""}</td>
-              <td>${fileCell}</td>
+              <td>
+                ${fileLabel}
+                ${
+                  fileCount
+                    ? `<button class="ops-view-file" data-order-id="${
+                        order.id
+                      }" data-file-index="0">View</button>`
+                    : ""
+                }
+              </td>
               <td>${order.status || ""}</td>
               <td>
                 <button
@@ -200,6 +223,27 @@
         document
           .getElementById("ops-table-body")
           .addEventListener("click", async (event) => {
+            const viewBtn = event.target.closest(".ops-view-file");
+            if (viewBtn) {
+              const orderId = viewBtn.getAttribute("data-order-id");
+              const index = viewBtn.getAttribute("data-file-index") || "0";
+              if (!orderId) return;
+              try {
+                const res = await opsFetch(
+                  `/api/operator/file?orderId=${orderId}&index=${index}`
+                );
+                const data = await res.json();
+                if (!res.ok || !data.ok || !data.url) {
+                  throw new Error(data.error || "Failed to open file.");
+                }
+                window.open(data.url, "_blank", "noopener");
+              } catch (err) {
+                console.error(err);
+                alert("Failed to open artwork file.");
+              }
+              return;
+            }
+
             const btn = event.target.closest(".ops-mark-complete");
             if (!btn) return;
 
