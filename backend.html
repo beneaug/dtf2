@@ -144,6 +144,32 @@
         return `$${(cents / 100).toFixed(2)}`;
       }
 
+      function getFileMimeType(file) {
+        if (!file || typeof file !== "object") return "";
+        return (
+          file.mimetype ||
+          file.mimeType ||
+          (file.filename &&
+            (file.filename.mimetype || file.filename.mimeType)) ||
+          ""
+        );
+      }
+
+      function getFileDisplayName(file, fallbackIndex) {
+        if (!file || typeof file !== "object") {
+          return fallbackIndex != null ? `File ${fallbackIndex + 1}` : "File";
+        }
+        if (typeof file.filename === "string") return file.filename;
+        if (typeof file.originalname === "string") return file.originalname;
+        if (
+          file.filename &&
+          typeof file.filename.filename === "string"
+        ) {
+          return file.filename.filename;
+        }
+        return fallbackIndex != null ? `File ${fallbackIndex + 1}` : "File";
+      }
+
       async function loadThumbnail(order, thumbContainer, size = "small") {
         if (!thumbContainer) return;
 
@@ -154,16 +180,18 @@
           return;
         }
 
-        const imageIndex =
-          files.findIndex(
-            (f) => f && typeof f.mimetype === "string" && f.mimetype.startsWith("image/")
-          ) || 0;
+        const firstImageIndex = files.findIndex((f) => {
+          const mime = getFileMimeType(f);
+          return typeof mime === "string" && mime.startsWith("image/");
+        });
+        const imageIndex = firstImageIndex >= 0 ? firstImageIndex : 0;
 
         const cacheKey = `${order.id}:${imageIndex}`;
         if (OPS_THUMBNAIL_CACHE[cacheKey]) {
+          const file = files[imageIndex];
           const img = document.createElement("img");
           img.src = OPS_THUMBNAIL_CACHE[cacheKey];
-          img.alt = files[imageIndex].filename || "Artwork";
+          img.alt = getFileDisplayName(file, imageIndex) || "Artwork";
           thumbContainer.innerHTML = "";
           thumbContainer.appendChild(img);
           return;
@@ -178,9 +206,10 @@
             throw new Error(data.error || "Failed to load artwork thumbnail.");
           }
           OPS_THUMBNAIL_CACHE[cacheKey] = data.url;
+          const file = files[imageIndex];
           const img = document.createElement("img");
           img.src = data.url;
-          img.alt = files[imageIndex].filename || "Artwork";
+          img.alt = getFileDisplayName(file, imageIndex) || "Artwork";
           thumbContainer.innerHTML = "";
           thumbContainer.appendChild(img);
         } catch (err) {
@@ -291,19 +320,19 @@
                 files.length
                   ? files
                       .map((file, index) => {
+                        const mime = getFileMimeType(file);
                         const isImage =
-                          file &&
-                          typeof file.mimetype === "string" &&
-                          file.mimetype.startsWith("image/");
+                          typeof mime === "string" && mime.startsWith("image/");
+                        const displayName = getFileDisplayName(file, index);
                         return `
                           <div class="ops-file-row">
                             <div class="ops-file-main">
                               <div class="ops-file-name">${
-                                file.filename || `File ${index + 1}`
+                                displayName
                               }</div>
                               <div class="ops-file-meta">
                                 ${isImage ? "Image" : "File"} · ${
-                          file.mimetype || "Unknown type"
+                          mime || "Unknown type"
                         }${
                           file.size
                             ? ` · ${(file.size / 1024).toFixed(1)} KB`
@@ -497,9 +526,10 @@
           }
         });
 
-        document
-          .getElementById("ops-order-list")
-          .addEventListener("click", async (event) => {
+        const opsRoot = document.getElementById("ops-root");
+        if (!opsRoot) return;
+
+        opsRoot.addEventListener("click", async (event) => {
             const viewBtn = event.target.closest(".ops-view-file");
             if (viewBtn) {
               const orderId = viewBtn.getAttribute("data-order-id");
