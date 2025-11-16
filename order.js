@@ -149,24 +149,40 @@ document.addEventListener("DOMContentLoaded", () => {
     if (stickerImages.length === 0) return;
 
     const label = (sizeSelect && sizeSelect.value) || '2" x 2"';
-    // Map size labels to a base pixel dimension so sizes feel 1:1 relative.
-    const baseSideMap = {
-      '2" x 2"': 80,
-      '4" x 4"': 140,
-      '6" x 6"': 200,
-      "Custom sheet": 220,
-    };
-    const baseSide = baseSideMap[label] || 120;
-
+    
+    // Parse the dimensions from the label (e.g., "9" x 9" -> 9, 9)
+    const match = label.match(/(\d+(?:\.\d+)?)"\s*x\s*(\d+(?:\.\d+)?)/);
+    if (!match) return;
+    
+    const boxW = parseFloat(match[1]);
+    const boxH = parseFloat(match[2]);
+    
+    // Use a scale factor: e.g., 20 pixels per inch for reasonable preview size
+    const pixelsPerInch = 20;
+    const displayW = boxW * pixelsPerInch;
+    const displayH = boxH * pixelsPerInch;
+    
     const firstImg = stickerImages[0];
-    const naturalW = firstImg.naturalWidth || baseSide;
-    const naturalH = firstImg.naturalHeight || baseSide;
-    const maxSide = Math.max(naturalW, naturalH);
-    const scale = baseSide / maxSide;
+    const naturalW = firstImg.naturalWidth || displayW;
+    const naturalH = firstImg.naturalHeight || displayH;
+    const aspect = naturalW / naturalH;
+    const boxAspect = boxW / boxH;
+    
+    // Fit the image to the box while maintaining aspect ratio
+    let finalW, finalH;
+    if (aspect >= boxAspect) {
+      // Image is wider than box
+      finalW = displayW;
+      finalH = displayW / aspect;
+    } else {
+      // Image is taller than box
+      finalH = displayH;
+      finalW = displayH * aspect;
+    }
 
     stickerImages.forEach(img => {
-      img.style.width = `${naturalW * scale}px`;
-      img.style.height = `${naturalH * scale}px`;
+      img.style.width = `${finalW}px`;
+      img.style.height = `${finalH}px`;
     });
   }
 

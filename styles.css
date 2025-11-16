@@ -368,11 +368,12 @@ body {
   margin-top: 1.4rem;
   border-radius: 0.9rem;
   background: rgba(5, 6, 8, 0.9);
-  padding: 0.75rem;
-  min-height: 120px;
+  padding: 1.5rem;
+  min-height: 200px;
   display: none; /* toggled on when a file is present */
   align-items: center;
   justify-content: center;
+  overflow: visible;
 }
 
 .order-upload-preview img {
@@ -1073,7 +1074,7 @@ body {
 
 :root {
   /* CONFIGURATION */
-  --sticker-rotate: 20deg;
+  --sticker-rotate: 0deg;
   
   /** If the image is clipped after rotation,
   /*  increase this value! **/
