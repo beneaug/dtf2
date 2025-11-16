@@ -528,15 +528,12 @@ body {
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
   
-  /* Cut out triangle for peeling corner */
+  /* Cut out triangle for peeling corner from top-right */
   clip-path: polygon(
-    calc(-1 * var(--transfer-p)) calc(-1 * var(--transfer-p)),
-    calc(100% + var(--transfer-p)) calc(-1 * var(--transfer-p)),
-    calc(100% + var(--transfer-p)) calc(-1 * var(--transfer-p) + var(--transfer-corner-size)),
-    calc(100% + var(--transfer-p) - var(--transfer-corner-size)) calc(-1 * var(--transfer-p)),
-    calc(100% + var(--transfer-p)) calc(-1 * var(--transfer-p)),
-    calc(100% + var(--transfer-p)) calc(100% + var(--transfer-p)),
-    calc(-1 * var(--transfer-p)) calc(100% + var(--transfer-p))
+    0% 0%,
+    100% 0%,
+    100% 100%,
+    0% 100%
   );
   
   filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.3));
@@ -545,26 +542,22 @@ body {
 
 .dtf-transfer-container:hover .dtf-sheet-main {
   clip-path: polygon(
-    calc(-1 * var(--transfer-p)) calc(-1 * var(--transfer-p)),
-    calc(100% + var(--transfer-p)) calc(-1 * var(--transfer-p)),
-    calc(100% + var(--transfer-p)) calc(-1 * var(--transfer-p) + var(--transfer-corner-hover)),
-    calc(100% + var(--transfer-p) - var(--transfer-corner-hover)) calc(-1 * var(--transfer-p)),
-    calc(100% + var(--transfer-p)) calc(-1 * var(--transfer-p)),
-    calc(100% + var(--transfer-p)) calc(100% + var(--transfer-p)),
-    calc(-1 * var(--transfer-p)) calc(100% + var(--transfer-p))
+    0% 0%,
+    calc(100% - var(--transfer-corner-hover) / 1.414) 0%,
+    100% calc(var(--transfer-corner-hover) / 1.414),
+    100% 100%,
+    0% 100%
   );
   transition: clip-path var(--transfer-peel-hover-easing);
 }
 
 .dtf-transfer-container:active .dtf-sheet-main {
   clip-path: polygon(
-    calc(-1 * var(--transfer-p)) calc(-1 * var(--transfer-p)),
-    calc(100% + var(--transfer-p)) calc(-1 * var(--transfer-p)),
-    calc(100% + var(--transfer-p)) calc(-1 * var(--transfer-p) + var(--transfer-corner-active)),
-    calc(100% + var(--transfer-p) - var(--transfer-corner-active)) calc(-1 * var(--transfer-p)),
-    calc(100% + var(--transfer-p)) calc(-1 * var(--transfer-p)),
-    calc(100% + var(--transfer-p)) calc(100% + var(--transfer-p)),
-    calc(-1 * var(--transfer-p)) calc(100% + var(--transfer-p))
+    0% 0%,
+    calc(100% - var(--transfer-corner-active) / 1.414) 0%,
+    100% calc(var(--transfer-corner-active) / 1.414),
+    100% 100%,
+    0% 100%
   );
   transition: clip-path var(--transfer-peel-easing);
 }
@@ -572,57 +565,73 @@ body {
 /* Shadow under the curling corner */
 .dtf-sheet-shadow {
   position: absolute;
-  top: calc(-1 * var(--transfer-p) + 8px);
-  left: calc(-1 * var(--transfer-p) + 8px);
-  width: 0;
-  height: 0;
+  top: calc(-1 * var(--transfer-p));
+  left: calc(-1 * var(--transfer-p));
+  width: calc(100% + 2 * var(--transfer-p));
+  height: calc(100% + 2 * var(--transfer-p));
   
-  /* Triangular shadow */
-  border-style: solid;
-  border-width: 0 var(--transfer-corner-size) var(--transfer-corner-size) 0;
-  border-color: transparent rgba(0, 0, 0, 0) transparent transparent;
+  /* Triangular shadow area */
+  clip-path: polygon(
+    100% 0%,
+    100% 0%,
+    100% 0%
+  );
   
-  transform-origin: top right;
+  background: rgba(0, 0, 0, 0);
+  filter: blur(8px);
   opacity: 0;
-  filter: blur(6px);
-  transition: all var(--transfer-peel-hover-easing);
+  transition: clip-path var(--transfer-peel-hover-easing), opacity var(--transfer-peel-hover-easing);
   pointer-events: none;
 }
 
 .dtf-transfer-container:hover .dtf-sheet-shadow {
-  border-width: 0 var(--transfer-corner-hover) var(--transfer-corner-hover) 0;
-  border-color: transparent rgba(0, 0, 0, 0.4) transparent transparent;
+  clip-path: polygon(
+    calc(100% - var(--transfer-corner-hover) / 1.414) 0%,
+    calc(100% + 10px) calc(-10px),
+    calc(100% + 10px) calc(var(--transfer-corner-hover) / 1.414 + 10px),
+    100% calc(var(--transfer-corner-hover) / 1.414)
+  );
+  background: rgba(0, 0, 0, 0.4);
   opacity: 1;
-  transition: all var(--transfer-peel-hover-easing);
+  transition: clip-path var(--transfer-peel-hover-easing), opacity var(--transfer-peel-hover-easing);
 }
 
 .dtf-transfer-container:active .dtf-sheet-shadow {
-  border-width: 0 var(--transfer-corner-active) var(--transfer-corner-active) 0;
-  border-color: transparent rgba(0, 0, 0, 0.5) transparent transparent;
+  clip-path: polygon(
+    calc(100% - var(--transfer-corner-active) / 1.414) 0%,
+    calc(100% + 15px) calc(-15px),
+    calc(100% + 15px) calc(var(--transfer-corner-active) / 1.414 + 15px),
+    100% calc(var(--transfer-corner-active) / 1.414)
+  );
+  background: rgba(0, 0, 0, 0.5);
   opacity: 1;
-  transition: all var(--transfer-peel-easing);
+  transition: clip-path var(--transfer-peel-easing), opacity var(--transfer-peel-easing);
 }
 
 /* The peeling corner triangle - rotates in 3D */
 .dtf-sheet-flap {
   position: absolute;
   top: calc(-1 * var(--transfer-p));
-  right: calc(-1 * var(--transfer-p));
-  width: 0;
-  height: 0;
+  left: calc(-1 * var(--transfer-p));
+  width: calc(100% + 2 * var(--transfer-p));
+  height: calc(100% + 2 * var(--transfer-p));
   
-  /* Triangle shape */
-  border-style: solid;
-  border-width: var(--transfer-corner-size) var(--transfer-corner-size) 0 0;
-  border-color: rgba(160, 160, 160, 0.55) transparent transparent transparent;
+  /* Triangle shape for corner */
+  clip-path: polygon(
+    100% 0%,
+    100% 0%,
+    100% 0%
+  );
   
-  transform-origin: 100% 0%;
-  transform-style: preserve-3d;
-  transform: rotateZ(-45deg) rotateX(0deg) rotateY(0deg);
-  
-  filter: url(#pointLightFlipped);
+  background: rgba(160, 160, 160, 0.55);
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
+  
+  transform-origin: top right;
+  transform-style: preserve-3d;
+  transform: rotateZ(0deg) rotateX(0deg) rotateY(0deg);
+  
+  filter: url(#pointLightFlipped);
   
   transition: all var(--transfer-peel-hover-easing);
   box-shadow: 
@@ -631,23 +640,31 @@ body {
 }
 
 .dtf-transfer-container:hover .dtf-sheet-flap {
-  border-width: var(--transfer-corner-hover) var(--transfer-corner-hover) 0 0;
-  border-color: rgba(160, 160, 160, 0.6) transparent transparent transparent;
-  transform: rotateZ(-45deg) rotateX(35deg) rotateY(-35deg);
+  clip-path: polygon(
+    calc(100% - var(--transfer-corner-hover) / 1.414) 0%,
+    100% 0%,
+    100% calc(var(--transfer-corner-hover) / 1.414)
+  );
+  background: rgba(160, 160, 160, 0.6);
+  transform: rotateZ(0deg) rotateX(40deg) rotateY(-40deg);
   transition: all var(--transfer-peel-hover-easing);
   box-shadow: 
-    -4px 4px 12px rgba(0, 0, 0, 0.25),
-    -2px 2px 6px rgba(0, 0, 0, 0.15);
+    -4px 4px 16px rgba(0, 0, 0, 0.3),
+    -2px 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .dtf-transfer-container:active .dtf-sheet-flap {
-  border-width: var(--transfer-corner-active) var(--transfer-corner-active) 0 0;
-  border-color: rgba(160, 160, 160, 0.65) transparent transparent transparent;
-  transform: rotateZ(-45deg) rotateX(50deg) rotateY(-50deg);
+  clip-path: polygon(
+    calc(100% - var(--transfer-corner-active) / 1.414) 0%,
+    100% 0%,
+    100% calc(var(--transfer-corner-active) / 1.414)
+  );
+  background: rgba(160, 160, 160, 0.65);
+  transform: rotateZ(0deg) rotateX(55deg) rotateY(-55deg);
   transition: all var(--transfer-peel-easing);
   box-shadow: 
-    -6px 6px 18px rgba(0, 0, 0, 0.35),
-    -3px 3px 9px rgba(0, 0, 0, 0.2);
+    -6px 6px 24px rgba(0, 0, 0, 0.4),
+    -3px 3px 12px rgba(0, 0, 0, 0.25);
 }
 
 .order-upload-preview-fallback {
