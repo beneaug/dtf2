@@ -1079,8 +1079,8 @@ body {
   /** If the image is clipped after rotation,
   /*  increase this value! **/
   --sticker-p: 10px;
-  --sticker-peelback-hover: 30%;
-  --sticker-peelback-active: 60%;
+  --sticker-peelback-hover: 25%;
+  --sticker-peelback-active: 50%;
   --sticker-peel-easing: 2s
     linear(
       0,
@@ -1186,8 +1186,9 @@ body {
 
 .sticker-container:hover .sticker-main {
   clip-path: polygon(
-    var(--sticker-start) var(--sticker-peelback-hover),
-    var(--sticker-end) var(--sticker-peelback-hover),
+    var(--sticker-start) var(--sticker-start),
+    calc(100% - var(--sticker-peelback-hover) * 1.732) var(--sticker-start),
+    var(--sticker-end) calc(var(--sticker-peelback-hover) * 1.732),
     var(--sticker-end) var(--sticker-end),
     var(--sticker-start) var(--sticker-end)
   );
@@ -1196,8 +1197,9 @@ body {
 
 .sticker-container:active .sticker-main {
   clip-path: polygon(
-    var(--sticker-start) var(--sticker-peelback-active),
-    var(--sticker-end) var(--sticker-peelback-active),
+    var(--sticker-start) var(--sticker-start),
+    calc(100% - var(--sticker-peelback-active) * 1.732) var(--sticker-start),
+    var(--sticker-end) calc(var(--sticker-peelback-active) * 1.732),
     var(--sticker-end) var(--sticker-end),
     var(--sticker-start) var(--sticker-end)
   );
@@ -1213,37 +1215,33 @@ body {
   position: absolute;
   width: 100%;
   height: 100%;
-  left: 0;
-  top: calc(-100% - var(--sticker-p) - var(--sticker-p));
+  right: 0;
+  top: 0;
   clip-path: polygon(
-    var(--sticker-start) var(--sticker-start),
-    var(--sticker-end) var(--sticker-start),
-    var(--sticker-end) var(--sticker-start),
-    var(--sticker-start) var(--sticker-start)
+    100% 0%,
+    100% 0%,
+    100% 0%
   );
-  transform: scaleY(-1);
+  transform-origin: top right;
+  transform: rotateY(180deg) rotateZ(-60deg);
   transition: all var(--sticker-peel-hover-easing);
 }
 
 .sticker-container:hover .flap {
   clip-path: polygon(
-    var(--sticker-start) var(--sticker-start),
-    var(--sticker-end) var(--sticker-start),
-    var(--sticker-end) var(--sticker-peelback-hover),
-    var(--sticker-start) var(--sticker-peelback-hover)
+    calc(100% - var(--sticker-peelback-hover) * 1.732) 0%,
+    100% 0%,
+    100% calc(var(--sticker-peelback-hover) * 1.732)
   );
-  top: calc(-100% + 2 * var(--sticker-peelback-hover) - 1px);
   transition: all var(--sticker-peel-hover-easing);
 }
 
 .sticker-container:active .flap {
   clip-path: polygon(
-    var(--sticker-start) var(--sticker-start),
-    var(--sticker-end) var(--sticker-start),
-    var(--sticker-end) var(--sticker-peelback-active),
-    var(--sticker-start) var(--sticker-peelback-active)
+    calc(100% - var(--sticker-peelback-active) * 1.732) 0%,
+    100% 0%,
+    100% calc(var(--sticker-peelback-active) * 1.732)
   );
-  top: calc(-100% + 2 * var(--sticker-peelback-active) - 1px);
   transition: all var(--sticker-peel-easing);
 }
 
@@ -1260,12 +1258,13 @@ body {
 
 .shadow {
   position: absolute;
-  top: 1rem;
-  left: 0.5rem;
+  top: 0.5rem;
+  right: -0.5rem;
   width: 100%;
   height: 100%;
   filter: brightness(0) blur(8px);
   opacity: 0.4;
+  pointer-events: none;
 }
 
 .sticker-main,
