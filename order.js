@@ -186,22 +186,35 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const clampedProgress = Math.max(0, Math.min(100, progress));
     
-    // Update main sheet clip-path
+    // Calculate 70-degree angle peel
+    // The peel starts from top-left and moves diagonally
+    const angleOffset = clampedProgress * 0.15; // horizontal offset for angle
+    const verticalProgress = clampedProgress;
+    
+    // Update main sheet clip-path with angled peel
     sheet.style.clipPath = `polygon(
-      0% ${clampedProgress}%,
-      100% ${clampedProgress}%,
+      ${angleOffset}% ${verticalProgress}%,
+      100% ${Math.max(0, verticalProgress - angleOffset * 0.5)}%,
       100% 100%,
       0% 100%
     )`;
 
-    // Update flap
+    // Update flap with matching angle and 3D transform
     flap.style.clipPath = `polygon(
       0% 0%,
       100% 0%,
-      100% ${clampedProgress}%,
-      0% ${clampedProgress}%
+      100% ${Math.max(0, verticalProgress - angleOffset * 0.5)}%,
+      ${angleOffset}% ${verticalProgress}%
     )`;
+    
+    // Add 3D curl effect - more pronounced as it peels
+    const rotateX = -15 - (clampedProgress * 0.2); // curl back
+    const rotateZ = -2 - (clampedProgress * 0.05); // slight twist
+    const translateZ = clampedProgress * 0.3; // lift off surface
+    
+    flap.style.transform = `rotateX(${rotateX}deg) rotateZ(${rotateZ}deg) translateZ(${translateZ}px)`;
     flap.style.top = `calc(-100% + ${clampedProgress * 2}%)`;
+    flap.style.left = `calc(-20% - ${clampedProgress * 0.1}%)`;
   }
 
   function updateLightPosition(mouseX, mouseY, container) {

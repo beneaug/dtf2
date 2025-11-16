@@ -396,6 +396,8 @@ body {
   -moz-user-select: none;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
+  perspective: 1000px;
+  perspective-origin: center center;
 }
 
 .sticker-container-wrapper * {
@@ -419,6 +421,26 @@ body {
   height: 100%;
   z-index: 2;
   pointer-events: none;
+  transform-style: preserve-3d;
+}
+
+/* Add a curl shadow edge for more realism */
+.transfer-sheet::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.3), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.sticker-container-wrapper:hover .transfer-sheet::before,
+.sticker-container-wrapper.peeling .transfer-sheet::before {
+  opacity: 1;
 }
 
 .transfer-sheet {
@@ -428,21 +450,24 @@ body {
   left: -20%;
   width: 140%;
   height: 140%;
-  background: rgba(179, 179, 179, 0.7);
+  background: linear-gradient(160deg, rgba(200, 200, 200, 0.75) 0%, rgba(160, 160, 160, 0.7) 100%);
   backdrop-filter: blur(0.5px);
   -webkit-backdrop-filter: blur(0.5px);
   border-radius: 0; /* Hard corners */
   filter: url(#transferSheetLight);
   transition: clip-path 0.8s cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* 70-degree angled peel - starts from top-left */
   clip-path: polygon(
     0% 0%,
     100% 0%,
     100% 100%,
     0% 100%
   );
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4),
+              inset -2px -2px 8px rgba(255, 255, 255, 0.1);
   pointer-events: auto;
   cursor: grab;
+  transform-style: preserve-3d;
 }
 
 .transfer-sheet:active {
@@ -454,43 +479,51 @@ body {
   top: -100%;
   left: -20%;
   width: 140%;
-  height: 100%;
-  background: rgba(140, 140, 140, 0.5);
+  height: 120%;
+  background: linear-gradient(160deg, rgba(130, 130, 130, 0.6) 0%, rgba(100, 100, 100, 0.5) 100%);
   backdrop-filter: blur(0.5px);
   -webkit-backdrop-filter: blur(0.5px);
   border-radius: 0; /* Hard corners */
-  transform: scaleY(-1);
-  transform-origin: bottom;
-  filter: url(#transferSheetLight) brightness(0.8);
+  transform-origin: bottom left;
+  filter: url(#transferSheetLight) brightness(0.7) contrast(1.1);
   transition: all 0.8s cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* 70-degree angled peel */
   clip-path: polygon(
     0% 0%,
     100% 0%,
     100% 0%,
     0% 0%
   );
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 
+    0 8px 16px rgba(0, 0, 0, 0.5),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 2px 2px 6px rgba(255, 255, 255, 0.2);
   pointer-events: none;
+  transform-style: preserve-3d;
 }
 
-/* Hover state */
+/* Hover state - 70 degree angle peel */
 .sticker-container-wrapper:hover .transfer-sheet {
+  /* Angled peel from top-left at ~70 degrees */
   clip-path: polygon(
-    0% 20%,
-    100% 20%,
+    15% 20%,
+    100% 0%,
     100% 100%,
     0% 100%
   );
 }
 
 .sticker-container-wrapper:hover .transfer-sheet-flap {
+  /* Matching angled flap */
   clip-path: polygon(
     0% 0%,
     100% 0%,
-    100% 20%,
-    0% 20%
+    100% 0%,
+    15% 20%
   );
-  top: calc(-100% + 40%);
+  transform: rotateX(-15deg) rotateZ(-2deg);
+  top: calc(-100% + 20%);
+  left: calc(-20% - 5%);
 }
 
 /* Active/dragging state */
