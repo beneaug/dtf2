@@ -186,35 +186,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const clampedProgress = Math.max(0, Math.min(100, progress));
     
-    // Calculate 70-degree angle peel
-    // The peel starts from top-left and moves diagonally
-    const angleOffset = clampedProgress * 0.15; // horizontal offset for angle
-    const verticalProgress = clampedProgress;
+    // 70-degree angle: calculate the diagonal peel line
+    // tan(70°) ≈ 2.747, but we'll use a gentler slope for visual effect
+    const horizontalShift = clampedProgress * 0.35; // Creates ~70-degree angle
     
-    // Update main sheet clip-path with angled peel
+    // Main sheet: clips away the peeled portion at an angle
     sheet.style.clipPath = `polygon(
-      ${angleOffset}% ${verticalProgress}%,
-      100% ${Math.max(0, verticalProgress - angleOffset * 0.5)}%,
+      ${horizontalShift}% ${clampedProgress}%,
+      100% ${Math.max(0, clampedProgress - horizontalShift * 0.4)}%,
       100% 100%,
       0% 100%
     )`;
 
-    // Update flap with matching angle and 3D transform
+    // Flap: shows the peeled portion, positioned above and moving with the peel
     flap.style.clipPath = `polygon(
       0% 0%,
-      100% 0%,
-      100% ${Math.max(0, verticalProgress - angleOffset * 0.5)}%,
-      ${angleOffset}% ${verticalProgress}%
+      ${100 - horizontalShift * 0.6}% 0%,
+      100% ${Math.max(0, clampedProgress - horizontalShift * 0.4)}%,
+      ${horizontalShift}% ${clampedProgress}%
     )`;
     
-    // Add 3D curl effect - more pronounced as it peels
-    const rotateX = -15 - (clampedProgress * 0.2); // curl back
-    const rotateZ = -2 - (clampedProgress * 0.05); // slight twist
-    const translateZ = clampedProgress * 0.3; // lift off surface
+    // Position the flap so it aligns with the peel line
+    const topOffset = -100 + (clampedProgress * 2);
+    const leftOffset = -20 - (horizontalShift * 0.3);
     
-    flap.style.transform = `rotateX(${rotateX}deg) rotateZ(${rotateZ}deg) translateZ(${translateZ}px)`;
-    flap.style.top = `calc(-100% + ${clampedProgress * 2}%)`;
-    flap.style.left = `calc(-20% - ${clampedProgress * 0.1}%)`;
+    flap.style.top = `${topOffset}%`;
+    flap.style.left = `${leftOffset}%`;
   }
 
   function updateLightPosition(mouseX, mouseY, container) {

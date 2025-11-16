@@ -479,12 +479,14 @@ body {
   top: -100%;
   left: -20%;
   width: 140%;
-  height: 120%;
+  height: 140%;
   background: linear-gradient(160deg, rgba(130, 130, 130, 0.6) 0%, rgba(100, 100, 100, 0.5) 100%);
   backdrop-filter: blur(0.5px);
   -webkit-backdrop-filter: blur(0.5px);
   border-radius: 0; /* Hard corners */
-  transform-origin: bottom left;
+  /* Flip the flap to show underside effect */
+  transform: scaleY(-1);
+  transform-origin: bottom;
   filter: url(#transferSheetLight) brightness(0.7) contrast(1.1);
   transition: all 0.8s cubic-bezier(0.22, 0.61, 0.36, 1);
   /* 70-degree angled peel */
@@ -499,31 +501,29 @@ body {
     0 2px 8px rgba(0, 0, 0, 0.3),
     inset 2px 2px 6px rgba(255, 255, 255, 0.2);
   pointer-events: none;
-  transform-style: preserve-3d;
 }
 
 /* Hover state - 70 degree angle peel */
 .sticker-container-wrapper:hover .transfer-sheet {
   /* Angled peel from top-left at ~70 degrees */
   clip-path: polygon(
-    15% 20%,
-    100% 0%,
+    7% 20%,
+    100% 13%,
     100% 100%,
     0% 100%
   );
 }
 
 .sticker-container-wrapper:hover .transfer-sheet-flap {
-  /* Matching angled flap */
+  /* Matching angled flap - shows the peeled portion */
   clip-path: polygon(
     0% 0%,
-    100% 0%,
-    100% 0%,
-    15% 20%
+    93% 0%,
+    100% 13%,
+    7% 20%
   );
-  transform: rotateX(-15deg) rotateZ(-2deg);
-  top: calc(-100% + 20%);
-  left: calc(-20% - 5%);
+  top: calc(-100% + 40%);
+  left: calc(-20% - 2%);
 }
 
 /* Active/dragging state */
