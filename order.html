@@ -94,17 +94,32 @@
             <!-- SVG Filters for Transfer Sheet Effect -->
             <svg height="0" width="0" style="position: absolute;">
               <defs>
-                <filter id="transferSheetLight">
-                  <feGaussianBlur stdDeviation="0.5" result="blur" />
-                  <feSpecularLighting result="spec" in="blur" specularExponent="80" specularConstant="0.3" lightingColor="white">
-                    <fePointLight x="100" y="100" z="200" id="fePointLightSheet" />
+                <filter id="pointLight">
+                  <feGaussianBlur stdDeviation="1" result="blur" />
+                  <feSpecularLighting result="spec" in="blur" specularExponent="100" specularConstant="0.1" lightingColor="white">
+                    <fePointLight x="100" y="100" z="300" id="fePointLightMain" />
                   </feSpecularLighting>
                   <feComposite in="spec" in2="SourceGraphic" operator="screen" result="lit" />
                   <feComposite in="lit" in2="SourceAlpha" operator="in" />
                 </filter>
                 
-                <filter id="stickerDropShadow">
-                  <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="black" flood-opacity="0.3" />
+                <filter id="pointLightFlipped">
+                  <feGaussianBlur stdDeviation="10" result="blur" />
+                  <feSpecularLighting result="spec" in="blur" specularExponent="100" specularConstant="0.7" lightingColor="white">
+                    <fePointLight x="100" y="100" z="300" id="fePointLightFlipped" />
+                  </feSpecularLighting>
+                  <feComposite in="spec" in2="SourceGraphic" operator="screen" result="lit" />
+                  <feComposite in="lit" in2="SourceAlpha" operator="in" />
+                </filter>
+                
+                <filter id="dropShadow">
+                  <feDropShadow dx="2" dy="4" stdDeviation="3" flood-color="black" flood-opacity="0.6" />
+                </filter>
+                
+                <filter id="expandAndFill">
+                  <feOffset dx="0" dy="0" in="SourceAlpha" result="shape" />
+                  <feFlood flood-color="rgb(179, 179, 179)" result="flood" />
+                  <feComposite operator="in" in="flood" in2="shape" />
                 </filter>
               </defs>
             </svg>

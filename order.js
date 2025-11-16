@@ -145,8 +145,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // Artwork preview in the upload area
   function applyPreviewSizing() {
     if (!previewEl) return;
-    const img = previewEl.querySelector(".sticker-main-image") || previewEl.querySelector("img");
-    if (!img) return;
+    const imgs = previewEl.querySelectorAll(".sticker-image, .shadow-image, .flap-image");
+    if (imgs.length === 0) return;
 
     const label = (sizeSelect && sizeSelect.value) || '2" x 2"';
     
@@ -160,17 +160,19 @@ document.addEventListener("DOMContentLoaded", () => {
       targetInches = Math.max(w, h); // use the larger dimension
     }
     
-    // Convert inches to pixels (96 DPI standard, but scale up for better visibility)
+    // Convert inches to pixels (96 DPI standard)
     const pixelsPerInch = 96;
     const baseSide = targetInches * pixelsPerInch;
 
-    const naturalW = img.naturalWidth || baseSide;
-    const naturalH = img.naturalHeight || baseSide;
-    const maxSide = Math.max(naturalW, naturalH);
-    const scale = baseSide / maxSide;
+    imgs.forEach(img => {
+      const naturalW = img.naturalWidth || baseSide;
+      const naturalH = img.naturalHeight || baseSide;
+      const maxSide = Math.max(naturalW, naturalH);
+      const scale = baseSide / maxSide;
 
-    img.style.width = `${naturalW * scale}px`;
-    img.style.height = `${naturalH * scale}px`;
+      img.style.width = `${naturalW * scale}px`;
+      img.style.height = `${naturalH * scale}px`;
+    });
   }
 
   // Transfer sheet peel effect state
@@ -180,43 +182,42 @@ document.addEventListener("DOMContentLoaded", () => {
   let lastScrollY = 0;
 
   function updateTransferSheetPeel(progress, container) {
-    const sheet = container.querySelector('.transfer-sheet');
-    const flap = container.querySelector('.transfer-sheet-flap');
-    if (!sheet || !flap) return;
+    const stickerMain = container.querySelector('.sticker-main');
+    // Get the main flap (not the one inside shadow) - it's the last .flap
+    const flaps = container.querySelectorAll('.flap');
+    const flap = flaps[flaps.length - 1]; // Last one is the visible peeled flap
+    if (!stickerMain || !flap) return;
 
     const clampedProgress = Math.max(0, Math.min(100, progress));
     
     // 70-degree angle: calculate the diagonal peel line
-    // tan(70°) ≈ 2.747, but we'll use a gentler slope for visual effect
-    const horizontalShift = clampedProgress * 0.35; // Creates ~70-degree angle
+    const horizontalShift = clampedProgress * 0.35;
     
-    // Main sheet: clips away the peeled portion at an angle
-    sheet.style.clipPath = `polygon(
-      ${horizontalShift}% ${clampedProgress}%,
-      100% ${Math.max(0, clampedProgress - horizontalShift * 0.4)}%,
-      100% 100%,
-      0% 100%
+    // Clip the main sticker at an angle
+    const padding = 10; // sticker-p equivalent
+    stickerMain.style.clipPath = `polygon(
+      ${-padding}px ${clampedProgress}%,
+      calc(100% + ${padding}px) ${Math.max(0, clampedProgress - horizontalShift * 0.4)}%,
+      calc(100% + ${padding}px) calc(100% + ${padding}px),
+      ${-padding}px calc(100% + ${padding}px)
     )`;
 
-    // Flap: shows the peeled portion, positioned above and moving with the peel
+    // Show the flap (peeled portion)
     flap.style.clipPath = `polygon(
-      0% 0%,
-      ${100 - horizontalShift * 0.6}% 0%,
-      100% ${Math.max(0, clampedProgress - horizontalShift * 0.4)}%,
-      ${horizontalShift}% ${clampedProgress}%
+      ${-padding}px ${-padding}px,
+      calc(100% + ${padding}px) ${-padding}px,
+      calc(100% + ${padding}px) ${Math.max(0, clampedProgress - horizontalShift * 0.4)}%,
+      ${-padding}px ${clampedProgress}%
     )`;
     
-    // Position the flap so it aligns with the peel line
-    const topOffset = -100 + (clampedProgress * 2);
-    const leftOffset = -20 - (horizontalShift * 0.3);
-    
-    flap.style.top = `${topOffset}%`;
-    flap.style.left = `${leftOffset}%`;
+    // Position the flap
+    flap.style.top = `calc(-100% - ${padding * 2}px + ${clampedProgress * 2}% - 1px)`;
   }
 
   function updateLightPosition(mouseX, mouseY, container) {
-    const pointLight = document.getElementById('fePointLightSheet');
-    if (!pointLight) return;
+    const pointLight = document.getElementById('fePointLightMain');
+    const pointLightFlipped = document.getElementById('fePointLightFlipped');
+    if (!pointLight || !pointLightFlipped) return;
     
     const rect = container.getBoundingClientRect();
     const relativeX = mouseX - rect.left;
@@ -224,6 +225,8 @@ document.addEventListener("DOMContentLoaded", () => {
     
     pointLight.setAttribute('x', relativeX);
     pointLight.setAttribute('y', relativeY);
+    pointLightFlipped.setAttribute('x', relativeX);
+    pointLightFlipped.setAttribute('y', rect.height - relativeY);
   }
 
   if (uploadInput && previewEl) {
@@ -235,32 +238,71 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!file) return;
 
       if (file.type && file.type.startsWith("image/")) {
-        const img = document.createElement("img");
-        img.alt = file.name;
-        img.src = URL.createObjectURL(file);
-        img.className = "sticker-main-image";
-        img.draggable = false;
+        const imgSrc = URL.createObjectURL(file);
+        const tempImg = new Image();
+        tempImg.src = imgSrc;
         
-        img.onload = () => {
-          // Wrap image in sticker container structure
-          const wrapper = document.createElement('div');
-          wrapper.className = 'sticker-container-wrapper';
+        tempImg.onload = () => {
+          // Create the sticker container (like the CodePen)
+          const stickerContainer = document.createElement('div');
+          stickerContainer.className = 'sticker-container';
           
-          const overlay = document.createElement('div');
-          overlay.className = 'transfer-sheet-overlay';
+          // 1. Main sticker with lighting
+          const stickerMain = document.createElement('div');
+          stickerMain.className = 'sticker-main';
           
-          const sheet = document.createElement('div');
-          sheet.className = 'transfer-sheet';
+          const stickerLighting = document.createElement('div');
+          stickerLighting.className = 'sticker-lighting';
           
+          const mainImg = document.createElement('img');
+          mainImg.src = imgSrc;
+          mainImg.alt = file.name;
+          mainImg.className = 'sticker-image';
+          mainImg.draggable = false;
+          mainImg.setAttribute('oncontextmenu', 'return false');
+          
+          stickerLighting.appendChild(mainImg);
+          stickerMain.appendChild(stickerLighting);
+          
+          // 2. Shadow (for depth)
+          const shadow = document.createElement('div');
+          shadow.className = 'shadow';
+          
+          const shadowFlap = document.createElement('div');
+          shadowFlap.className = 'flap';
+          
+          const shadowImg = document.createElement('img');
+          shadowImg.src = imgSrc;
+          shadowImg.alt = file.name;
+          shadowImg.className = 'shadow-image';
+          shadowImg.draggable = false;
+          shadowImg.setAttribute('oncontextmenu', 'return false');
+          
+          shadowFlap.appendChild(shadowImg);
+          shadow.appendChild(shadowFlap);
+          
+          // 3. Flap (peeled back grey version)
           const flap = document.createElement('div');
-          flap.className = 'transfer-sheet-flap';
+          flap.className = 'flap';
           
-          overlay.appendChild(sheet);
-          overlay.appendChild(flap);
+          const flapLighting = document.createElement('div');
+          flapLighting.className = 'flap-lighting';
           
-          wrapper.appendChild(img);
-          wrapper.appendChild(overlay);
-          previewEl.appendChild(wrapper);
+          const flapImg = document.createElement('img');
+          flapImg.src = imgSrc;
+          flapImg.alt = file.name;
+          flapImg.className = 'flap-image';
+          flapImg.draggable = false;
+          flapImg.setAttribute('oncontextmenu', 'return false');
+          
+          flapLighting.appendChild(flapImg);
+          flap.appendChild(flapLighting);
+          
+          // Assemble structure
+          stickerContainer.appendChild(stickerMain);
+          stickerContainer.appendChild(shadow);
+          stickerContainer.appendChild(flap);
+          previewEl.appendChild(stickerContainer);
           
           applyPreviewSizing();
           
@@ -272,8 +314,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (match) {
               const boxW = parseFloat(match[1]);
               const boxH = parseFloat(match[2]);
-              const naturalW = img.naturalWidth || 1;
-              const naturalH = img.naturalHeight || 1;
+              const naturalW = tempImg.naturalWidth || 1;
+              const naturalH = tempImg.naturalHeight || 1;
               const aspect = naturalW / naturalH;
               const boxAspect = boxW / boxH;
 
@@ -297,37 +339,37 @@ document.addEventListener("DOMContentLoaded", () => {
           let dragStartY = 0;
           let dragStartProgress = 0;
           
-          sheet.addEventListener('mousedown', (e) => {
+          stickerMain.addEventListener('mousedown', (e) => {
             isPeeling = true;
             dragStartY = e.clientY;
             dragStartProgress = peelProgress;
-            wrapper.classList.add('peeling');
+            stickerContainer.classList.add('peeling');
             e.preventDefault();
           });
           
           document.addEventListener('mousemove', (e) => {
-            updateLightPosition(e.clientX, e.clientY, wrapper);
+            updateLightPosition(e.clientX, e.clientY, stickerContainer);
             
             if (isPeeling) {
               const deltaY = e.clientY - dragStartY;
-              const rect = wrapper.getBoundingClientRect();
+              const rect = stickerContainer.getBoundingClientRect();
               const progressDelta = (deltaY / rect.height) * 100;
               peelProgress = Math.max(0, Math.min(100, dragStartProgress + progressDelta));
-              updateTransferSheetPeel(peelProgress, wrapper);
+              updateTransferSheetPeel(peelProgress, stickerContainer);
             }
           });
           
           document.addEventListener('mouseup', () => {
             if (isPeeling) {
               isPeeling = false;
-              wrapper.classList.remove('peeling');
+              stickerContainer.classList.remove('peeling');
               
               // If peeled more than 80%, complete the peel
               if (peelProgress > 80) {
                 peelProgress = 100;
-                updateTransferSheetPeel(100, wrapper);
+                updateTransferSheetPeel(100, stickerContainer);
                 setTimeout(() => {
-                  sheet.style.opacity = '0';
+                  stickerMain.style.opacity = '0';
                   flap.style.opacity = '0';
                 }, 300);
               }
@@ -348,13 +390,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 peelProgress = Math.max(0, peelProgress + scrollDelta * 0.3);
               }
               
-              updateTransferSheetPeel(peelProgress, wrapper);
+              updateTransferSheetPeel(peelProgress, stickerContainer);
               lastScrollY = scrollY;
               
               // Complete peel if scrolled enough
               if (peelProgress >= 100) {
                 scrollPeelEnabled = false;
-                sheet.style.opacity = '0';
+                stickerMain.style.opacity = '0';
                 flap.style.opacity = '0';
               }
             }
@@ -368,7 +410,7 @@ document.addEventListener("DOMContentLoaded", () => {
           }, 500);
           
           // Release memory once the image is loaded
-          URL.revokeObjectURL(img.src);
+          URL.revokeObjectURL(imgSrc);
         };
       } else {
         const fallback = document.createElement("div");

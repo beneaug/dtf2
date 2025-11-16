@@ -387,151 +387,128 @@ body {
   display: flex;
 }
 
-/* Transfer Sheet Peel Effect */
-.sticker-container-wrapper {
+/* Transfer Sheet Peel Effect - Original CodePen Structure */
+.sticker-container {
   position: relative;
   display: inline-block;
-  user-select: none;
+}
+
+.sticker-container * {
   -webkit-user-select: none;
   -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
-  perspective: 1000px;
-  perspective-origin: center center;
 }
 
-.sticker-container-wrapper * {
-  user-select: none;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-}
-
-.sticker-main-image {
-  display: block;
-  position: relative;
-  z-index: 1;
-  filter: url(#stickerDropShadow);
-}
-
-.transfer-sheet-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 2;
-  pointer-events: none;
-  transform-style: preserve-3d;
-}
-
-/* Add a curl shadow edge for more realism */
-.transfer-sheet::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.3), transparent);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-}
-
-.sticker-container-wrapper:hover .transfer-sheet::before,
-.sticker-container-wrapper.peeling .transfer-sheet::before {
-  opacity: 1;
-}
-
-.transfer-sheet {
-  position: absolute;
-  /* Make it significantly oversized - rectangle around the art */
-  top: -20%;
-  left: -20%;
-  width: 140%;
-  height: 140%;
-  background: linear-gradient(160deg, rgba(200, 200, 200, 0.75) 0%, rgba(160, 160, 160, 0.7) 100%);
-  backdrop-filter: blur(0.5px);
-  -webkit-backdrop-filter: blur(0.5px);
-  border-radius: 0; /* Hard corners */
-  filter: url(#transferSheetLight);
-  transition: clip-path 0.8s cubic-bezier(0.22, 0.61, 0.36, 1);
-  /* 70-degree angled peel - starts from top-left */
+.sticker-main {
   clip-path: polygon(
-    0% 0%,
-    100% 0%,
-    100% 100%,
-    0% 100%
+    -10px -10px,
+    calc(100% + 10px) -10px,
+    calc(100% + 10px) calc(100% + 10px),
+    -10px calc(100% + 10px)
   );
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4),
-              inset -2px -2px 8px rgba(255, 255, 255, 0.1);
-  pointer-events: auto;
+  transition: clip-path 0.8s cubic-bezier(0.22, 0.61, 0.36, 1);
+  filter: url(#dropShadow);
   cursor: grab;
-  transform-style: preserve-3d;
 }
 
-.transfer-sheet:active {
+.sticker-main:active {
   cursor: grabbing;
 }
 
-.transfer-sheet-flap {
-  position: absolute;
-  top: -100%;
-  left: -20%;
-  width: 140%;
-  height: 140%;
-  background: linear-gradient(160deg, rgba(130, 130, 130, 0.6) 0%, rgba(100, 100, 100, 0.5) 100%);
-  backdrop-filter: blur(0.5px);
-  -webkit-backdrop-filter: blur(0.5px);
-  border-radius: 0; /* Hard corners */
-  /* Flip the flap to show underside effect */
-  transform: scaleY(-1);
-  transform-origin: bottom;
-  filter: url(#transferSheetLight) brightness(0.7) contrast(1.1);
-  transition: all 0.8s cubic-bezier(0.22, 0.61, 0.36, 1);
-  /* 70-degree angled peel */
+.sticker-lighting {
+  filter: url(#pointLight);
+}
+
+.sticker-container:hover .sticker-main {
   clip-path: polygon(
-    0% 0%,
-    100% 0%,
-    100% 0%,
-    0% 0%
+    -10px 30%,
+    calc(100% + 10px) 20%,
+    calc(100% + 10px) calc(100% + 10px),
+    -10px calc(100% + 10px)
   );
-  box-shadow: 
-    0 8px 16px rgba(0, 0, 0, 0.5),
-    0 2px 8px rgba(0, 0, 0, 0.3),
-    inset 2px 2px 6px rgba(255, 255, 255, 0.2);
+}
+
+.sticker-container:active .sticker-main {
+  clip-path: polygon(
+    -10px 60%,
+    calc(100% + 10px) 50%,
+    calc(100% + 10px) calc(100% + 10px),
+    -10px calc(100% + 10px)
+  );
+}
+
+.sticker-image {
+  display: block;
+}
+
+.flap {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  left: 0;
+  top: calc(-100% - 20px);
+  clip-path: polygon(
+    -10px -10px,
+    calc(100% + 10px) -10px,
+    calc(100% + 10px) -10px,
+    -10px -10px
+  );
+  transform: scaleY(-1);
+  transition: all 0.8s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.sticker-container:hover .flap {
+  clip-path: polygon(
+    -10px -10px,
+    calc(100% + 10px) -10px,
+    calc(100% + 10px) 20%,
+    -10px 30%
+  );
+  top: calc(-100% + 60% - 1px);
+}
+
+.sticker-container:active .flap {
+  clip-path: polygon(
+    -10px -10px,
+    calc(100% + 10px) -10px,
+    calc(100% + 10px) 50%,
+    -10px 60%
+  );
+  top: calc(-100% + 120% - 1px);
+}
+
+.flap-lighting {
+  filter: url(#pointLightFlipped);
+}
+
+.flap-image,
+.shadow-image {
+  filter: url(#expandAndFill);
+  display: block;
+}
+
+.shadow {
+  position: absolute;
+  top: 1rem;
+  left: 0.5rem;
+  width: 100%;
+  height: 100%;
+  filter: brightness(0) blur(8px);
+  opacity: 0.4;
   pointer-events: none;
 }
 
-/* Hover state - 70 degree angle peel */
-.sticker-container-wrapper:hover .transfer-sheet {
-  /* Angled peel from top-left at ~70 degrees */
-  clip-path: polygon(
-    7% 20%,
-    100% 13%,
-    100% 100%,
-    0% 100%
-  );
-}
-
-.sticker-container-wrapper:hover .transfer-sheet-flap {
-  /* Matching angled flap - shows the peeled portion */
-  clip-path: polygon(
-    0% 0%,
-    93% 0%,
-    100% 13%,
-    7% 20%
-  );
-  top: calc(-100% + 40%);
-  left: calc(-20% - 2%);
+.sticker-main,
+.flap {
+  will-change: clip-path, transform;
 }
 
 /* Active/dragging state */
-.sticker-container-wrapper.peeling .transfer-sheet {
-  transition: clip-path 0.3s ease-out;
-}
-
-.sticker-container-wrapper.peeling .transfer-sheet-flap {
+.sticker-container.peeling .sticker-main,
+.sticker-container.peeling .flap {
   transition: all 0.3s ease-out;
 }
 
