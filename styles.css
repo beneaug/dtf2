@@ -1223,7 +1223,7 @@ body {
     100% 0%
   );
   transform-origin: top right;
-  transform: rotateY(180deg) rotateZ(-60deg);
+  transform: scaleY(-1);
   transition: all var(--sticker-peel-hover-easing);
 }
 
