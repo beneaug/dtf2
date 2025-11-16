@@ -9,6 +9,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const card = form.closest(".order-card") || document;
   const uploadInput = card.querySelector(".order-upload-input");
   const previewEl = card.querySelector(".order-upload-preview");
+  const stickerArtImg =
+    previewEl && previewEl.querySelector(".sticker-art");
   const tabs = Array.from(card.querySelectorAll(".order-tab"));
   const sizeSelect = form.querySelector('select[name="size"]');
   const transferNameInput = form.querySelector('input[name="transferName"]');
@@ -142,11 +144,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (totalSummaryEl) totalSummaryEl.textContent = formatPrice(total);
   }
 
-  // Artwork preview in the upload area
+  // Artwork preview in the upload area (peel mockup)
   function applyPreviewSizing() {
-    if (!previewEl) return;
-    const img = previewEl.querySelector("img");
-    if (!img) return;
+    if (!previewEl || !stickerArtImg) return;
+    const img = stickerArtImg;
 
     const label = (sizeSelect && sizeSelect.value) || '2" x 2"';
     // Map size labels to a base pixel dimension so sizes feel 1:1 relative.
@@ -170,16 +171,14 @@ document.addEventListener("DOMContentLoaded", () => {
   if (uploadInput && previewEl) {
     uploadInput.addEventListener("change", () => {
       const file = uploadInput.files && uploadInput.files[0];
-      previewEl.innerHTML = "";
-      previewEl.classList.remove("order-upload-preview--visible");
-
       if (!file) return;
 
       if (file.type && file.type.startsWith("image/")) {
-        const img = document.createElement("img");
-        img.alt = file.name;
-        img.src = URL.createObjectURL(file);
-        img.onload = () => {
+        if (!stickerArtImg) return;
+        const objectUrl = URL.createObjectURL(file);
+        stickerArtImg.alt = file.name;
+        stickerArtImg.src = objectUrl;
+        stickerArtImg.onload = () => {
           applyPreviewSizing();
           // Actual artwork size calculation
           if (artSizeEl && sizeSelect) {
@@ -189,8 +188,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (match) {
               const boxW = parseFloat(match[1]);
               const boxH = parseFloat(match[2]);
-              const naturalW = img.naturalWidth || 1;
-              const naturalH = img.naturalHeight || 1;
+              const naturalW = stickerArtImg.naturalWidth || 1;
+              const naturalH = stickerArtImg.naturalHeight || 1;
               const aspect = naturalW / naturalH;
               const boxAspect = boxW / boxH;
 
@@ -210,10 +209,9 @@ document.addEventListener("DOMContentLoaded", () => {
             }
           }
           // Release memory once the image is loaded
-          URL.revokeObjectURL(img.src);
+          URL.revokeObjectURL(objectUrl);
         };
-        previewEl.appendChild(img);
-      } else {
+      } else if (file) {
         const fallback = document.createElement("div");
         fallback.className = "order-upload-preview-fallback";
         fallback.textContent = file.name;
@@ -238,6 +236,80 @@ document.addEventListener("DOMContentLoaded", () => {
     qtyInput.addEventListener("input", updatePricingDisplay);
   }
   updatePricingDisplay();
+
+  // Interactive heat transfer peel mockup
+  const pointLight = document.querySelector("fePointLight");
+  const pointLightFlipped = document.getElementById("fePointLightFlipped");
+  const stickerContainer = document.querySelector(".sticker-container");
+  const draggable = document.querySelector(".draggable");
+
+  if (pointLight && pointLightFlipped && stickerContainer && draggable) {
+    let isDragging = false;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+
+    function getContainingBlockOffset(element) {
+      const containingBlock =
+        element.offsetParent || document.documentElement;
+      const containingBlockRect = containingBlock.getBoundingClientRect();
+      return {
+        left: containingBlockRect.left,
+        top: containingBlockRect.top,
+      };
+    }
+
+    function updateLightPosition(mouseX, mouseY) {
+      const rect = stickerContainer.getBoundingClientRect();
+      const relativeX = mouseX - rect.left;
+      const relativeY = mouseY - rect.top;
+      pointLight.setAttribute("x", relativeX);
+      pointLight.setAttribute("y", relativeY);
+      pointLightFlipped.setAttribute("x", relativeX);
+      pointLightFlipped.setAttribute("y", rect.height - relativeY);
+    }
+
+    function startDrag(e) {
+      isDragging = true;
+      const rect = draggable.getBoundingClientRect();
+      const containingBlockOffset = getContainingBlockOffset(draggable);
+
+      dragOffsetX = e.clientX - rect.left;
+      dragOffsetY = e.clientY - rect.top;
+
+      draggable.style.left =
+        rect.left - containingBlockOffset.left + "px";
+      draggable.style.top =
+        rect.top - containingBlockOffset.top + "px";
+    }
+
+    function updateDragPosition(e) {
+      if (isDragging) {
+        const containingBlockOffset = getContainingBlockOffset(draggable);
+        draggable.style.left =
+          e.clientX - dragOffsetX - containingBlockOffset.left + "px";
+        draggable.style.top =
+          e.clientY - dragOffsetY - containingBlockOffset.top + "px";
+      }
+    }
+
+    function stopDrag() {
+      isDragging = false;
+    }
+
+    draggable.addEventListener("mousedown", startDrag);
+    document.addEventListener("mouseup", stopDrag);
+    document.addEventListener("mousemove", (e) => {
+      updateLightPosition(e.clientX, e.clientY);
+      updateDragPosition(e);
+    });
+
+    // Initialize light in center of container
+    const rect = stickerContainer.getBoundingClientRect();
+    updateLightPosition(
+      rect.left + rect.width / 2,
+      rect.top + rect.height / 2
+    );
+  }
 
   // Mode tabs – just cosmetic for now, but we record the choice.
   let currentMode = "single-image";
