@@ -149,14 +149,20 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!img) return;
 
     const label = (sizeSelect && sizeSelect.value) || '2" x 2"';
-    // Map size labels to a base pixel dimension so sizes feel 1:1 relative.
-    const baseSideMap = {
-      '2" x 2"': 80,
-      '4" x 4"': 140,
-      '6" x 6"': 200,
-      "Custom sheet": 220,
-    };
-    const baseSide = baseSideMap[label] || 120;
+    
+    // Parse the size label to get actual dimensions
+    const match = label.match(/(\d+(?:\.\d+)?)"\s*x\s*(\d+(?:\.\d+)?)/);
+    let targetInches = 2; // default
+    
+    if (match) {
+      const w = parseFloat(match[1]);
+      const h = parseFloat(match[2]);
+      targetInches = Math.max(w, h); // use the larger dimension
+    }
+    
+    // Convert inches to pixels (96 DPI standard, but scale up for better visibility)
+    const pixelsPerInch = 96;
+    const baseSide = targetInches * pixelsPerInch;
 
     const naturalW = img.naturalWidth || baseSide;
     const naturalH = img.naturalHeight || baseSide;

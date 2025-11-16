@@ -95,8 +95,8 @@
             <svg height="0" width="0" style="position: absolute;">
               <defs>
                 <filter id="transferSheetLight">
-                  <feGaussianBlur stdDeviation="2" result="blur" />
-                  <feSpecularLighting result="spec" in="blur" specularExponent="80" specularConstant="0.5" lightingColor="white">
+                  <feGaussianBlur stdDeviation="0.5" result="blur" />
+                  <feSpecularLighting result="spec" in="blur" specularExponent="80" specularConstant="0.3" lightingColor="white">
                     <fePointLight x="100" y="100" z="200" id="fePointLightSheet" />
                   </feSpecularLighting>
                   <feComposite in="spec" in2="SourceGraphic" operator="screen" result="lit" />
