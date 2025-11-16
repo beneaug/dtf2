@@ -248,15 +248,15 @@ document.addEventListener("DOMContentLoaded", () => {
         const transferSheet = document.createElement("div");
         transferSheet.className = "dtf-transfer-sheet";
         
-        // Shadow layer
+        // Shadow layer (appears under the peeling flap)
         const shadow = document.createElement("div");
         shadow.className = "dtf-sheet-shadow";
         const shadowInner = document.createElement("div");
-        shadowInner.className = "dtf-sheet-shadow-inner";
+        shadowInner.className = "dtf-flap-inner";
         shadow.appendChild(shadowInner);
         transferSheet.appendChild(shadow);
         
-        // Main sheet layer (covers the image)
+        // Main sheet layer (covers the image, clips away as corner peels)
         const sheetMain = document.createElement("div");
         sheetMain.className = "dtf-sheet-main";
         const sheetFog = document.createElement("div");
@@ -264,7 +264,7 @@ document.addEventListener("DOMContentLoaded", () => {
         sheetMain.appendChild(sheetFog);
         transferSheet.appendChild(sheetMain);
         
-        // Flap layer (peeled back part)
+        // Flap layer (the peeled-back corner with 3D rotation)
         const sheetFlap = document.createElement("div");
         sheetFlap.className = "dtf-sheet-flap";
         const flapLighting = document.createElement("div");
