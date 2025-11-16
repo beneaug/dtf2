@@ -145,61 +145,40 @@ document.addEventListener("DOMContentLoaded", () => {
   // Artwork preview in the upload area
   function applyPreviewSizing() {
     if (!previewEl) return;
-    const stickerImages = previewEl.querySelectorAll(".sticker-image, .flap-image, .shadow-image");
-    if (stickerImages.length === 0) return;
+    const img = previewEl.querySelector("img");
+    if (!img) return;
 
     const label = (sizeSelect && sizeSelect.value) || '2" x 2"';
-    
-    // Parse the dimensions from the label (e.g., "9" x 9" -> 9, 9)
-    const match = label.match(/(\d+(?:\.\d+)?)"\s*x\s*(\d+(?:\.\d+)?)/);
-    if (!match) return;
-    
-    const boxW = parseFloat(match[1]);
-    const boxH = parseFloat(match[2]);
-    
-    // Use 96 DPI (standard screen resolution) for 1:1 scale representation
-    const pixelsPerInch = 96;
-    const displayW = boxW * pixelsPerInch;
-    const displayH = boxH * pixelsPerInch;
-    
-    const firstImg = stickerImages[0];
-    const naturalW = firstImg.naturalWidth || displayW;
-    const naturalH = firstImg.naturalHeight || displayH;
-    const aspect = naturalW / naturalH;
-    const boxAspect = boxW / boxH;
-    
-    // Fit the image to the box while maintaining aspect ratio
-    let finalW, finalH;
-    if (aspect >= boxAspect) {
-      // Image is wider than box
-      finalW = displayW;
-      finalH = displayW / aspect;
-    } else {
-      // Image is taller than box
-      finalH = displayH;
-      finalW = displayH * aspect;
-    }
+    // Map size labels to a base pixel dimension so sizes feel 1:1 relative.
+    const baseSideMap = {
+      '2" x 2"': 80,
+      '4" x 2"': 80,
+      '3" x 3"': 100,
+      '5" x 3"': 120,
+      '4" x 4"': 140,
+      '5" x 5"': 160,
+      '6" x 6"': 200,
+      '7" x 7"': 220,
+      '11" x 5"': 240,
+      '8" x 8"': 240,
+      '9" x 9"': 260,
+      '9" x 11"': 280,
+      '10" x 10"': 280,
+      '11" x 11"': 300,
+      '11" x 14"': 320,
+      '12" x 17"': 340,
+      '12" x 22"': 360,
+      "Custom sheet": 220,
+    };
+    const baseSide = baseSideMap[label] || 120;
 
-    stickerImages.forEach(img => {
-      img.style.width = `${finalW}px`;
-      img.style.height = `${finalH}px`;
-    });
-  }
+    const naturalW = img.naturalWidth || baseSide;
+    const naturalH = img.naturalHeight || baseSide;
+    const maxSide = Math.max(naturalW, naturalH);
+    const scale = baseSide / maxSide;
 
-  // Update light position based on mouse movement
-  function updateLightPosition(e, stickerContainer) {
-    const pointLight = document.querySelector("fePointLight");
-    const pointLightFlipped = document.getElementById("fePointLightFlipped");
-    if (!pointLight || !pointLightFlipped) return;
-
-    const rect = stickerContainer.getBoundingClientRect();
-    const relativeX = e.clientX - rect.left;
-    const relativeY = e.clientY - rect.top;
-    
-    pointLight.setAttribute("x", relativeX);
-    pointLight.setAttribute("y", relativeY);
-    pointLightFlipped.setAttribute("x", relativeX);
-    pointLightFlipped.setAttribute("y", rect.height - relativeY);
+    img.style.width = `${naturalW * scale}px`;
+    img.style.height = `${naturalH * scale}px`;
   }
 
   if (uploadInput && previewEl) {
@@ -211,72 +190,13 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!file) return;
 
       if (file.type && file.type.startsWith("image/")) {
-        const imgSrc = URL.createObjectURL(file);
+        const img = document.createElement("img");
+        img.alt = file.name;
+        img.src = URL.createObjectURL(file);
+        img.draggable = false;
+        img.oncontextmenu = () => false;
         
-        // Create sticker structure
-        const stickerContainer = document.createElement("div");
-        stickerContainer.className = "sticker-container";
-        
-        // Main sticker
-        const stickerMain = document.createElement("div");
-        stickerMain.className = "sticker-main";
-        
-        const stickerLighting = document.createElement("div");
-        stickerLighting.className = "sticker-lighting";
-        
-        const stickerImage = document.createElement("img");
-        stickerImage.className = "sticker-image";
-        stickerImage.alt = file.name;
-        stickerImage.src = imgSrc;
-        stickerImage.draggable = false;
-        stickerImage.oncontextmenu = () => false;
-        
-        stickerLighting.appendChild(stickerImage);
-        stickerMain.appendChild(stickerLighting);
-        stickerContainer.appendChild(stickerMain);
-        
-        // Shadow
-        const shadow = document.createElement("div");
-        shadow.className = "shadow";
-        
-        const shadowFlap = document.createElement("div");
-        shadowFlap.className = "flap";
-        
-        const shadowImage = document.createElement("img");
-        shadowImage.className = "shadow-image";
-        shadowImage.src = imgSrc;
-        shadowImage.alt = file.name;
-        shadowImage.draggable = false;
-        shadowImage.oncontextmenu = () => false;
-        
-        shadowFlap.appendChild(shadowImage);
-        shadow.appendChild(shadowFlap);
-        stickerContainer.appendChild(shadow);
-        
-        // Flap (peel effect)
-        const flap = document.createElement("div");
-        flap.className = "flap";
-        
-        const flapLighting = document.createElement("div");
-        flapLighting.className = "flap-lighting";
-        
-        const flapImage = document.createElement("img");
-        flapImage.className = "flap-image";
-        flapImage.src = imgSrc;
-        flapImage.alt = file.name;
-        flapImage.draggable = false;
-        flapImage.oncontextmenu = () => false;
-        
-        flapLighting.appendChild(flapImage);
-        flap.appendChild(flapLighting);
-        stickerContainer.appendChild(flap);
-        
-        // Add mouse tracking for lighting effect
-        stickerContainer.addEventListener("mousemove", (e) => {
-          updateLightPosition(e, stickerContainer);
-        });
-        
-        stickerImage.onload = () => {
+        img.onload = () => {
           applyPreviewSizing();
           // Actual artwork size calculation
           if (artSizeEl && sizeSelect) {
@@ -286,8 +206,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (match) {
               const boxW = parseFloat(match[1]);
               const boxH = parseFloat(match[2]);
-              const naturalW = stickerImage.naturalWidth || 1;
-              const naturalH = stickerImage.naturalHeight || 1;
+              const naturalW = img.naturalWidth || 1;
+              const naturalH = img.naturalHeight || 1;
               const aspect = naturalW / naturalH;
               const boxAspect = boxW / boxH;
 
@@ -307,10 +227,56 @@ document.addEventListener("DOMContentLoaded", () => {
             }
           }
           // Release memory once the image is loaded
-          URL.revokeObjectURL(imgSrc);
+          URL.revokeObjectURL(img.src);
         };
         
-        previewEl.appendChild(stickerContainer);
+        // Create DTF transfer structure
+        const container = document.createElement("div");
+        container.className = "dtf-transfer-container";
+        
+        const artworkBase = document.createElement("div");
+        artworkBase.className = "dtf-artwork-base";
+        
+        const artworkLighting = document.createElement("div");
+        artworkLighting.className = "dtf-artwork-lighting";
+        artworkLighting.appendChild(img);
+        
+        artworkBase.appendChild(artworkLighting);
+        container.appendChild(artworkBase);
+        
+        // Transfer sheet overlay
+        const transferSheet = document.createElement("div");
+        transferSheet.className = "dtf-transfer-sheet";
+        
+        // Shadow layer
+        const shadow = document.createElement("div");
+        shadow.className = "dtf-sheet-shadow";
+        const shadowInner = document.createElement("div");
+        shadowInner.className = "dtf-sheet-shadow-inner";
+        shadow.appendChild(shadowInner);
+        transferSheet.appendChild(shadow);
+        
+        // Main sheet layer (covers the image)
+        const sheetMain = document.createElement("div");
+        sheetMain.className = "dtf-sheet-main";
+        const sheetFog = document.createElement("div");
+        sheetFog.className = "dtf-sheet-fog";
+        sheetMain.appendChild(sheetFog);
+        transferSheet.appendChild(sheetMain);
+        
+        // Flap layer (peeled back part)
+        const sheetFlap = document.createElement("div");
+        sheetFlap.className = "dtf-sheet-flap";
+        const flapLighting = document.createElement("div");
+        flapLighting.className = "dtf-flap-lighting";
+        const flapInner = document.createElement("div");
+        flapInner.className = "dtf-flap-inner";
+        flapLighting.appendChild(flapInner);
+        sheetFlap.appendChild(flapLighting);
+        transferSheet.appendChild(sheetFlap);
+        
+        artworkBase.appendChild(transferSheet);
+        previewEl.appendChild(container);
       } else {
         const fallback = document.createElement("div");
         fallback.className = "order-upload-preview-fallback";
@@ -426,6 +392,93 @@ document.addEventListener("DOMContentLoaded", () => {
       submitBtn.textContent = "Checkout";
     }
   });
+
+  // === DTF Transfer Interactive Effects ===
+  const pointLight = document.querySelector("fePointLight");
+  const pointLightFlipped = document.getElementById("fePointLightFlipped");
+  let currentTransferContainer = null;
+  let currentArtworkBase = null;
+  let isDragging = false;
+  let dragOffsetX = 0;
+  let dragOffsetY = 0;
+
+  function getContainingBlockOffset(element) {
+    const containingBlock = element.offsetParent || document.documentElement;
+    const rect = containingBlock.getBoundingClientRect();
+    return {
+      left: rect.left,
+      top: rect.top
+    };
+  }
+
+  function updateLightPosition(mouseX, mouseY) {
+    if (!currentArtworkBase || !pointLight || !pointLightFlipped) return;
+    
+    const rect = currentArtworkBase.getBoundingClientRect();
+    const relativeX = mouseX - rect.left;
+    const relativeY = mouseY - rect.top;
+    
+    pointLight.setAttribute("x", relativeX);
+    pointLight.setAttribute("y", relativeY);
+    pointLightFlipped.setAttribute("x", relativeX);
+    pointLightFlipped.setAttribute("y", rect.height - relativeY);
+  }
+
+  function startDrag(e) {
+    if (!currentTransferContainer) return;
+    isDragging = true;
+    
+    const rect = currentTransferContainer.getBoundingClientRect();
+    const containingBlockOffset = getContainingBlockOffset(currentTransferContainer);
+    
+    dragOffsetX = e.clientX - rect.left;
+    dragOffsetY = e.clientY - rect.top;
+    
+    currentTransferContainer.style.position = "absolute";
+    currentTransferContainer.style.left = rect.left - containingBlockOffset.left + "px";
+    currentTransferContainer.style.top = rect.top - containingBlockOffset.top + "px";
+  }
+
+  function updateDragPosition(e) {
+    if (!isDragging || !currentTransferContainer) return;
+    
+    const containingBlockOffset = getContainingBlockOffset(currentTransferContainer);
+    currentTransferContainer.style.left = e.clientX - dragOffsetX - containingBlockOffset.left + "px";
+    currentTransferContainer.style.top = e.clientY - dragOffsetY - containingBlockOffset.top + "px";
+  }
+
+  function stopDrag() {
+    isDragging = false;
+  }
+
+  // Update references when a new image is loaded
+  const observer = new MutationObserver(() => {
+    const container = previewEl && previewEl.querySelector(".dtf-transfer-container");
+    const artworkBase = container && container.querySelector(".dtf-artwork-base");
+    
+    if (container && artworkBase) {
+      currentTransferContainer = container;
+      currentArtworkBase = artworkBase;
+      
+      // Remove old event listeners
+      container.removeEventListener("mousedown", startDrag);
+      
+      // Add new event listeners
+      container.addEventListener("mousedown", startDrag);
+    }
+  });
+
+  if (previewEl) {
+    observer.observe(previewEl, { childList: true, subtree: true });
+  }
+
+  // Global mouse movement for lighting
+  document.addEventListener("mousemove", (e) => {
+    updateLightPosition(e.clientX, e.clientY);
+    updateDragPosition(e);
+  });
+
+  document.addEventListener("mouseup", stopDrag);
 });
 
 
