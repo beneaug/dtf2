@@ -157,8 +157,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const boxW = parseFloat(match[1]);
     const boxH = parseFloat(match[2]);
     
-    // Use a scale factor: e.g., 20 pixels per inch for reasonable preview size
-    const pixelsPerInch = 20;
+    // Use 96 DPI (standard screen resolution) for 1:1 scale representation
+    const pixelsPerInch = 96;
     const displayW = boxW * pixelsPerInch;
     const displayH = boxH * pixelsPerInch;
     
