@@ -1215,14 +1215,14 @@ body {
   position: absolute;
   width: 100%;
   height: 100%;
-  right: 0;
-  top: 0;
+  left: 0;
+  top: calc(-100% - var(--sticker-p) - var(--sticker-p));
   clip-path: polygon(
-    100% 0%,
-    100% 0%,
-    100% 0%
+    var(--sticker-start) var(--sticker-start),
+    var(--sticker-end) var(--sticker-start),
+    var(--sticker-end) var(--sticker-start),
+    var(--sticker-start) var(--sticker-start)
   );
-  transform-origin: top right;
   transform: scaleY(-1);
   transition: all var(--sticker-peel-hover-easing);
 }
@@ -1233,6 +1233,7 @@ body {
     100% 0%,
     100% calc(var(--sticker-peelback-hover) * 1.732)
   );
+  top: calc(-100% + var(--sticker-peelback-hover) * 1.732 - 1px);
   transition: all var(--sticker-peel-hover-easing);
 }
 
@@ -1242,6 +1243,7 @@ body {
     100% 0%,
     100% calc(var(--sticker-peelback-active) * 1.732)
   );
+  top: calc(-100% + var(--sticker-peelback-active) * 1.732 - 1px);
   transition: all var(--sticker-peel-easing);
 }
 
@@ -1258,8 +1260,8 @@ body {
 
 .shadow {
   position: absolute;
-  top: 0.5rem;
-  right: -0.5rem;
+  top: 1rem;
+  left: 0.5rem;
   width: 100%;
   height: 100%;
   filter: brightness(0) blur(8px);
