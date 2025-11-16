@@ -145,7 +145,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Artwork preview in the upload area
   function applyPreviewSizing() {
     if (!previewEl) return;
-    const img = previewEl.querySelector("img");
+    const img = previewEl.querySelector(".sticker-main-image") || previewEl.querySelector("img");
     if (!img) return;
 
     const label = (sizeSelect && sizeSelect.value) || '2" x 2"';
@@ -167,113 +167,47 @@ document.addEventListener("DOMContentLoaded", () => {
     img.style.height = `${naturalH * scale}px`;
   }
 
-  // --- Sticker / transfer-sheet interactions ---
+  // Transfer sheet peel effect state
+  let isPeeling = false;
+  let peelProgress = 0; // 0 to 100
+  let scrollPeelEnabled = false;
+  let lastScrollY = 0;
 
-  function clamp01(value) {
-    if (value < 0) return 0;
-    if (value > 1) return 1;
-    return value;
+  function updateTransferSheetPeel(progress, container) {
+    const sheet = container.querySelector('.transfer-sheet');
+    const flap = container.querySelector('.transfer-sheet-flap');
+    if (!sheet || !flap) return;
+
+    const clampedProgress = Math.max(0, Math.min(100, progress));
+    
+    // Update main sheet clip-path
+    sheet.style.clipPath = `polygon(
+      0% ${clampedProgress}%,
+      100% ${clampedProgress}%,
+      100% 100%,
+      0% 100%
+    )`;
+
+    // Update flap
+    flap.style.clipPath = `polygon(
+      0% 0%,
+      100% 0%,
+      100% ${clampedProgress}%,
+      0% ${clampedProgress}%
+    )`;
+    flap.style.top = `calc(-100% + ${clampedProgress * 2}%)`;
   }
 
-  let currentTransferController = null;
-
-  function createTransferController(wrapper) {
-    if (!wrapper) return null;
-
-    let peel = 0;
-    let dragging = false;
-    let dragStartY = 0;
-    let peelAtDragStart = 0;
-
-    function applyPeel() {
-      const clamped = clamp01(peel);
-      wrapper.style.setProperty("--transfer-peel", clamped.toFixed(3));
-    }
-
-    function onPointerDown(event) {
-      dragging = true;
-      dragStartY = event.clientY;
-      peelAtDragStart = peel;
-      wrapper.classList.add("order-transfer--dragging");
-      if (wrapper.setPointerCapture && event.pointerId != null) {
-        try {
-          wrapper.setPointerCapture(event.pointerId);
-        } catch (_) {
-          // ignore
-        }
-      }
-    }
-
-    function onPointerMove(event) {
-      if (!dragging) return;
-      const clientY = event.clientY;
-      const deltaY = clientY - dragStartY;
-      const sensitivity = 260; // pixels of drag for full peel
-      peel = clamp01(peelAtDragStart + deltaY / -sensitivity);
-      applyPeel();
-    }
-
-    function onPointerUp(event) {
-      if (!dragging) return;
-      dragging = false;
-      wrapper.classList.remove("order-transfer--dragging");
-      if (wrapper.releasePointerCapture && event.pointerId != null) {
-        try {
-          wrapper.releasePointerCapture(event.pointerId);
-        } catch (_) {
-          // ignore
-        }
-      }
-    }
-
-    function onScroll() {
-      if (!document.body.contains(wrapper)) {
-        window.removeEventListener("scroll", onScroll);
-        return;
-      }
-      if (dragging) return;
-      const doc = document.documentElement;
-      const maxScrollable =
-        (doc.scrollHeight || 0) - (window.innerHeight || 0);
-      const denominator = Math.max(200, Math.min(800, maxScrollable || 0));
-      if (denominator <= 0) return;
-      const scrollY = window.scrollY || window.pageYOffset || 0;
-      const t = clamp01(scrollY / denominator);
-      // Let scroll gradually advance the peel, but don't snap it back.
-      if (t > peel) {
-        peel = t;
-        applyPeel();
-      }
-    }
-
-    wrapper.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
-    window.addEventListener("pointercancel", onPointerUp);
-    window.addEventListener("scroll", onScroll, { passive: true });
-
-    applyPeel();
-
-    return {
-      destroy() {
-        wrapper.removeEventListener("pointerdown", onPointerDown);
-        window.removeEventListener("pointermove", onPointerMove);
-        window.removeEventListener("pointerup", onPointerUp);
-        window.removeEventListener("pointercancel", onPointerUp);
-        window.removeEventListener("scroll", onScroll);
-      },
-    };
-  }
-
-  function initTransferPreview(previewRoot) {
-    if (!previewRoot) return;
-    const wrapper = previewRoot.querySelector(".order-sticker-wrapper");
-    if (!wrapper) return;
-    if (currentTransferController) {
-      currentTransferController.destroy();
-      currentTransferController = null;
-    }
-    currentTransferController = createTransferController(wrapper);
+  function updateLightPosition(mouseX, mouseY, container) {
+    const pointLight = document.getElementById('fePointLightSheet');
+    if (!pointLight) return;
+    
+    const rect = container.getBoundingClientRect();
+    const relativeX = mouseX - rect.left;
+    const relativeY = mouseY - rect.top;
+    
+    pointLight.setAttribute('x', relativeX);
+    pointLight.setAttribute('y', relativeY);
   }
 
   if (uploadInput && previewEl) {
@@ -288,25 +222,32 @@ document.addEventListener("DOMContentLoaded", () => {
         const img = document.createElement("img");
         img.alt = file.name;
         img.src = URL.createObjectURL(file);
-
-        // Wrap the uploaded art in a sticker + transfer sheet container
-        const wrapper = document.createElement("div");
-        wrapper.className = "order-sticker-wrapper";
-
-        const sheetShadow = document.createElement("div");
-        sheetShadow.className =
-          "order-transfer-sheet order-transfer-sheet--shadow";
-        const sheetFront = document.createElement("div");
-        sheetFront.className =
-          "order-transfer-sheet order-transfer-sheet--front";
-
-        wrapper.appendChild(img);
-        wrapper.appendChild(sheetShadow);
-        wrapper.appendChild(sheetFront);
-        previewEl.appendChild(wrapper);
-
+        img.className = "sticker-main-image";
+        img.draggable = false;
+        
         img.onload = () => {
+          // Wrap image in sticker container structure
+          const wrapper = document.createElement('div');
+          wrapper.className = 'sticker-container-wrapper';
+          
+          const overlay = document.createElement('div');
+          overlay.className = 'transfer-sheet-overlay';
+          
+          const sheet = document.createElement('div');
+          sheet.className = 'transfer-sheet';
+          
+          const flap = document.createElement('div');
+          flap.className = 'transfer-sheet-flap';
+          
+          overlay.appendChild(sheet);
+          overlay.appendChild(flap);
+          
+          wrapper.appendChild(img);
+          wrapper.appendChild(overlay);
+          previewEl.appendChild(wrapper);
+          
           applyPreviewSizing();
+          
           // Actual artwork size calculation
           if (artSizeEl && sizeSelect) {
             const label = sizeSelect.value;
@@ -335,9 +276,83 @@ document.addEventListener("DOMContentLoaded", () => {
               artSizeEl.textContent = label;
             }
           }
+          
+          // Setup transfer sheet interaction
+          let dragStartY = 0;
+          let dragStartProgress = 0;
+          
+          sheet.addEventListener('mousedown', (e) => {
+            isPeeling = true;
+            dragStartY = e.clientY;
+            dragStartProgress = peelProgress;
+            wrapper.classList.add('peeling');
+            e.preventDefault();
+          });
+          
+          document.addEventListener('mousemove', (e) => {
+            updateLightPosition(e.clientX, e.clientY, wrapper);
+            
+            if (isPeeling) {
+              const deltaY = e.clientY - dragStartY;
+              const rect = wrapper.getBoundingClientRect();
+              const progressDelta = (deltaY / rect.height) * 100;
+              peelProgress = Math.max(0, Math.min(100, dragStartProgress + progressDelta));
+              updateTransferSheetPeel(peelProgress, wrapper);
+            }
+          });
+          
+          document.addEventListener('mouseup', () => {
+            if (isPeeling) {
+              isPeeling = false;
+              wrapper.classList.remove('peeling');
+              
+              // If peeled more than 80%, complete the peel
+              if (peelProgress > 80) {
+                peelProgress = 100;
+                updateTransferSheetPeel(100, wrapper);
+                setTimeout(() => {
+                  sheet.style.opacity = '0';
+                  flap.style.opacity = '0';
+                }, 300);
+              }
+            }
+          });
+          
+          // Scroll-based peeling
+          const handleScroll = () => {
+            if (!isPeeling && scrollPeelEnabled) {
+              const scrollY = window.scrollY || window.pageYOffset;
+              const scrollDelta = scrollY - lastScrollY;
+              
+              if (scrollDelta > 0) {
+                // Scrolling down = peel more
+                peelProgress = Math.min(100, peelProgress + scrollDelta * 0.5);
+              } else {
+                // Scrolling up = peel less (optional)
+                peelProgress = Math.max(0, peelProgress + scrollDelta * 0.3);
+              }
+              
+              updateTransferSheetPeel(peelProgress, wrapper);
+              lastScrollY = scrollY;
+              
+              // Complete peel if scrolled enough
+              if (peelProgress >= 100) {
+                scrollPeelEnabled = false;
+                sheet.style.opacity = '0';
+                flap.style.opacity = '0';
+              }
+            }
+          };
+          
+          // Enable scroll peeling after a short delay
+          setTimeout(() => {
+            scrollPeelEnabled = true;
+            lastScrollY = window.scrollY || window.pageYOffset;
+            window.addEventListener('scroll', handleScroll);
+          }, 500);
+          
           // Release memory once the image is loaded
           URL.revokeObjectURL(img.src);
-          initTransferPreview(previewEl);
         };
       } else {
         const fallback = document.createElement("div");
