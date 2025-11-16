@@ -42,6 +42,42 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body class="order-body">
+    <!-- SVG filters for sticker effect -->
+    <svg height="0" width="0" style="position: absolute;">
+      <defs>
+        <filter id="pointLight">
+          <feGaussianBlur stdDeviation="1" result="blur" />
+          <feSpecularLighting result="spec" in="blur" specularExponent="100" specularConstant="0.1" lightingColor="white">
+            <fePointLight x="100" y="100" z="300" />
+          </feSpecularLighting>
+          <feComposite in="spec" in2="SourceGraphic" operator="screen" result="lit" />
+          <feComposite in="lit" in2="SourceAlpha" operator="in" />
+        </filter>
+        <filter id="pointLightFlipped">
+          <feGaussianBlur stdDeviation="10" result="blur" />
+          <feSpecularLighting result="spec" in="blur" specularExponent="100" specularConstant="0.7" lightingColor="white">
+            <fePointLight x="100" y="100" z="300" id="fePointLightFlipped" />
+          </feSpecularLighting>
+          <feComposite in="spec" in2="SourceGraphic" operator="screen" result="lit" />
+          <feComposite in="lit" in2="SourceAlpha" operator="in" />
+        </filter>
+        <filter id="dropShadow">
+          <feDropShadow dx="2" dy="4" stdDeviation="3" flood-color="black" flood-opacity="0.6" />
+        </filter>
+        <filter id="outerStroke">
+          <feMorphology operator="dilate" radius="10" in="SourceAlpha" result="expanded" />
+          <feColorMatrix in="expanded" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0" result="whiteExpanded" />
+          <feComposite operator="xor" in="whiteExpanded" in2="SourceAlpha" result="outerStroke" />
+          <feComposite operator="over" in="SourceGraphic" in2="outerStroke" />
+        </filter>
+        <filter id="expandAndFill">
+          <feOffset dx="0" dy="0" in="SourceAlpha" result="shape" />
+          <feFlood flood-color="rgb(179, 179, 179)" result="flood" />
+          <feComposite operator="in" in="flood" in2="shape" />
+        </filter>
+      </defs>
+    </svg>
+
     <div class="page-root">
       <div class="bg-gradient-root">
         <div class="bg-gradient-wrapper">
@@ -90,39 +126,6 @@
                 Supports: JPG, PNG, GIF, BMP, EPS, PDF, AI, SVG, PSD, TIF, TIFF
               </p>
             </div>
-
-            <!-- SVG Filters for Transfer Sheet Effect -->
-            <svg height="0" width="0" style="position: absolute;">
-              <defs>
-                <filter id="pointLight">
-                  <feGaussianBlur stdDeviation="1" result="blur" />
-                  <feSpecularLighting result="spec" in="blur" specularExponent="100" specularConstant="0.1" lightingColor="white">
-                    <fePointLight x="100" y="100" z="300" id="fePointLightMain" />
-                  </feSpecularLighting>
-                  <feComposite in="spec" in2="SourceGraphic" operator="screen" result="lit" />
-                  <feComposite in="lit" in2="SourceAlpha" operator="in" />
-                </filter>
-                
-                <filter id="pointLightFlipped">
-                  <feGaussianBlur stdDeviation="10" result="blur" />
-                  <feSpecularLighting result="spec" in="blur" specularExponent="100" specularConstant="0.7" lightingColor="white">
-                    <fePointLight x="100" y="100" z="300" id="fePointLightFlipped" />
-                  </feSpecularLighting>
-                  <feComposite in="spec" in2="SourceGraphic" operator="screen" result="lit" />
-                  <feComposite in="lit" in2="SourceAlpha" operator="in" />
-                </filter>
-                
-                <filter id="dropShadow">
-                  <feDropShadow dx="2" dy="4" stdDeviation="3" flood-color="black" flood-opacity="0.6" />
-                </filter>
-                
-                <filter id="expandAndFill">
-                  <feOffset dx="0" dy="0" in="SourceAlpha" result="shape" />
-                  <feFlood flood-color="rgb(179, 179, 179)" result="flood" />
-                  <feComposite operator="in" in="flood" in2="shape" />
-                </filter>
-              </defs>
-            </svg>
             <div class="order-grid">
               <label class="order-field">
                 <span class="order-field-label">Size</span>

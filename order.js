@@ -145,88 +145,45 @@ document.addEventListener("DOMContentLoaded", () => {
   // Artwork preview in the upload area
   function applyPreviewSizing() {
     if (!previewEl) return;
-    const imgs = previewEl.querySelectorAll(".sticker-image, .shadow-image, .flap-image");
-    if (imgs.length === 0) return;
+    const stickerImages = previewEl.querySelectorAll(".sticker-image, .flap-image, .shadow-image");
+    if (stickerImages.length === 0) return;
 
     const label = (sizeSelect && sizeSelect.value) || '2" x 2"';
-    
-    // Parse the size label to get actual dimensions
-    const match = label.match(/(\d+(?:\.\d+)?)"\s*x\s*(\d+(?:\.\d+)?)/);
-    let targetInches = 2; // default
-    
-    if (match) {
-      const w = parseFloat(match[1]);
-      const h = parseFloat(match[2]);
-      targetInches = Math.max(w, h); // use the larger dimension
-    }
-    
-    // Convert inches to pixels (96 DPI standard)
-    const pixelsPerInch = 96;
-    const baseSide = targetInches * pixelsPerInch;
+    // Map size labels to a base pixel dimension so sizes feel 1:1 relative.
+    const baseSideMap = {
+      '2" x 2"': 80,
+      '4" x 4"': 140,
+      '6" x 6"': 200,
+      "Custom sheet": 220,
+    };
+    const baseSide = baseSideMap[label] || 120;
 
-    imgs.forEach(img => {
-      const naturalW = img.naturalWidth || baseSide;
-      const naturalH = img.naturalHeight || baseSide;
-      const maxSide = Math.max(naturalW, naturalH);
-      const scale = baseSide / maxSide;
+    const firstImg = stickerImages[0];
+    const naturalW = firstImg.naturalWidth || baseSide;
+    const naturalH = firstImg.naturalHeight || baseSide;
+    const maxSide = Math.max(naturalW, naturalH);
+    const scale = baseSide / maxSide;
 
+    stickerImages.forEach(img => {
       img.style.width = `${naturalW * scale}px`;
       img.style.height = `${naturalH * scale}px`;
     });
   }
 
-  // Transfer sheet peel effect state
-  let isPeeling = false;
-  let peelProgress = 0; // 0 to 100
-  let scrollPeelEnabled = false;
-  let lastScrollY = 0;
-
-  function updateTransferSheetPeel(progress, container) {
-    const stickerMain = container.querySelector('.sticker-main');
-    // Get the main flap (not the one inside shadow) - it's the last .flap
-    const flaps = container.querySelectorAll('.flap');
-    const flap = flaps[flaps.length - 1]; // Last one is the visible peeled flap
-    if (!stickerMain || !flap) return;
-
-    const clampedProgress = Math.max(0, Math.min(100, progress));
-    
-    // 70-degree angle: calculate the diagonal peel line
-    const horizontalShift = clampedProgress * 0.35;
-    
-    // Clip the main sticker at an angle
-    const padding = 10; // sticker-p equivalent
-    stickerMain.style.clipPath = `polygon(
-      ${-padding}px ${clampedProgress}%,
-      calc(100% + ${padding}px) ${Math.max(0, clampedProgress - horizontalShift * 0.4)}%,
-      calc(100% + ${padding}px) calc(100% + ${padding}px),
-      ${-padding}px calc(100% + ${padding}px)
-    )`;
-
-    // Show the flap (peeled portion)
-    flap.style.clipPath = `polygon(
-      ${-padding}px ${-padding}px,
-      calc(100% + ${padding}px) ${-padding}px,
-      calc(100% + ${padding}px) ${Math.max(0, clampedProgress - horizontalShift * 0.4)}%,
-      ${-padding}px ${clampedProgress}%
-    )`;
-    
-    // Position the flap
-    flap.style.top = `calc(-100% - ${padding * 2}px + ${clampedProgress * 2}% - 1px)`;
-  }
-
-  function updateLightPosition(mouseX, mouseY, container) {
-    const pointLight = document.getElementById('fePointLightMain');
-    const pointLightFlipped = document.getElementById('fePointLightFlipped');
+  // Update light position based on mouse movement
+  function updateLightPosition(e, stickerContainer) {
+    const pointLight = document.querySelector("fePointLight");
+    const pointLightFlipped = document.getElementById("fePointLightFlipped");
     if (!pointLight || !pointLightFlipped) return;
+
+    const rect = stickerContainer.getBoundingClientRect();
+    const relativeX = e.clientX - rect.left;
+    const relativeY = e.clientY - rect.top;
     
-    const rect = container.getBoundingClientRect();
-    const relativeX = mouseX - rect.left;
-    const relativeY = mouseY - rect.top;
-    
-    pointLight.setAttribute('x', relativeX);
-    pointLight.setAttribute('y', relativeY);
-    pointLightFlipped.setAttribute('x', relativeX);
-    pointLightFlipped.setAttribute('y', rect.height - relativeY);
+    pointLight.setAttribute("x", relativeX);
+    pointLight.setAttribute("y", relativeY);
+    pointLightFlipped.setAttribute("x", relativeX);
+    pointLightFlipped.setAttribute("y", rect.height - relativeY);
   }
 
   if (uploadInput && previewEl) {
@@ -239,73 +196,72 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (file.type && file.type.startsWith("image/")) {
         const imgSrc = URL.createObjectURL(file);
-        const tempImg = new Image();
-        tempImg.src = imgSrc;
         
-        tempImg.onload = () => {
-          // Create the sticker container (like the CodePen)
-          const stickerContainer = document.createElement('div');
-          stickerContainer.className = 'sticker-container';
-          
-          // 1. Main sticker with lighting
-          const stickerMain = document.createElement('div');
-          stickerMain.className = 'sticker-main';
-          
-          const stickerLighting = document.createElement('div');
-          stickerLighting.className = 'sticker-lighting';
-          
-          const mainImg = document.createElement('img');
-          mainImg.src = imgSrc;
-          mainImg.alt = file.name;
-          mainImg.className = 'sticker-image';
-          mainImg.draggable = false;
-          mainImg.setAttribute('oncontextmenu', 'return false');
-          
-          stickerLighting.appendChild(mainImg);
-          stickerMain.appendChild(stickerLighting);
-          
-          // 2. Shadow (for depth)
-          const shadow = document.createElement('div');
-          shadow.className = 'shadow';
-          
-          const shadowFlap = document.createElement('div');
-          shadowFlap.className = 'flap';
-          
-          const shadowImg = document.createElement('img');
-          shadowImg.src = imgSrc;
-          shadowImg.alt = file.name;
-          shadowImg.className = 'shadow-image';
-          shadowImg.draggable = false;
-          shadowImg.setAttribute('oncontextmenu', 'return false');
-          
-          shadowFlap.appendChild(shadowImg);
-          shadow.appendChild(shadowFlap);
-          
-          // 3. Flap (peeled back grey version)
-          const flap = document.createElement('div');
-          flap.className = 'flap';
-          
-          const flapLighting = document.createElement('div');
-          flapLighting.className = 'flap-lighting';
-          
-          const flapImg = document.createElement('img');
-          flapImg.src = imgSrc;
-          flapImg.alt = file.name;
-          flapImg.className = 'flap-image';
-          flapImg.draggable = false;
-          flapImg.setAttribute('oncontextmenu', 'return false');
-          
-          flapLighting.appendChild(flapImg);
-          flap.appendChild(flapLighting);
-          
-          // Assemble structure
-          stickerContainer.appendChild(stickerMain);
-          stickerContainer.appendChild(shadow);
-          stickerContainer.appendChild(flap);
-          previewEl.appendChild(stickerContainer);
-          
+        // Create sticker structure
+        const stickerContainer = document.createElement("div");
+        stickerContainer.className = "sticker-container";
+        
+        // Main sticker
+        const stickerMain = document.createElement("div");
+        stickerMain.className = "sticker-main";
+        
+        const stickerLighting = document.createElement("div");
+        stickerLighting.className = "sticker-lighting";
+        
+        const stickerImage = document.createElement("img");
+        stickerImage.className = "sticker-image";
+        stickerImage.alt = file.name;
+        stickerImage.src = imgSrc;
+        stickerImage.draggable = false;
+        stickerImage.oncontextmenu = () => false;
+        
+        stickerLighting.appendChild(stickerImage);
+        stickerMain.appendChild(stickerLighting);
+        stickerContainer.appendChild(stickerMain);
+        
+        // Shadow
+        const shadow = document.createElement("div");
+        shadow.className = "shadow";
+        
+        const shadowFlap = document.createElement("div");
+        shadowFlap.className = "flap";
+        
+        const shadowImage = document.createElement("img");
+        shadowImage.className = "shadow-image";
+        shadowImage.src = imgSrc;
+        shadowImage.alt = file.name;
+        shadowImage.draggable = false;
+        shadowImage.oncontextmenu = () => false;
+        
+        shadowFlap.appendChild(shadowImage);
+        shadow.appendChild(shadowFlap);
+        stickerContainer.appendChild(shadow);
+        
+        // Flap (peel effect)
+        const flap = document.createElement("div");
+        flap.className = "flap";
+        
+        const flapLighting = document.createElement("div");
+        flapLighting.className = "flap-lighting";
+        
+        const flapImage = document.createElement("img");
+        flapImage.className = "flap-image";
+        flapImage.src = imgSrc;
+        flapImage.alt = file.name;
+        flapImage.draggable = false;
+        flapImage.oncontextmenu = () => false;
+        
+        flapLighting.appendChild(flapImage);
+        flap.appendChild(flapLighting);
+        stickerContainer.appendChild(flap);
+        
+        // Add mouse tracking for lighting effect
+        stickerContainer.addEventListener("mousemove", (e) => {
+          updateLightPosition(e, stickerContainer);
+        });
+        
+        stickerImage.onload = () => {
           applyPreviewSizing();
-          
           // Actual artwork size calculation
           if (artSizeEl && sizeSelect) {
             const label = sizeSelect.value;
@@ -314,8 +270,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (match) {
               const boxW = parseFloat(match[1]);
               const boxH = parseFloat(match[2]);
-              const naturalW = tempImg.naturalWidth || 1;
-              const naturalH = tempImg.naturalHeight || 1;
+              const naturalW = stickerImage.naturalWidth || 1;
+              const naturalH = stickerImage.naturalHeight || 1;
               const aspect = naturalW / naturalH;
               const boxAspect = boxW / boxH;
 
@@ -334,84 +290,11 @@ document.addEventListener("DOMContentLoaded", () => {
               artSizeEl.textContent = label;
             }
           }
-          
-          // Setup transfer sheet interaction
-          let dragStartY = 0;
-          let dragStartProgress = 0;
-          
-          stickerMain.addEventListener('mousedown', (e) => {
-            isPeeling = true;
-            dragStartY = e.clientY;
-            dragStartProgress = peelProgress;
-            stickerContainer.classList.add('peeling');
-            e.preventDefault();
-          });
-          
-          document.addEventListener('mousemove', (e) => {
-            updateLightPosition(e.clientX, e.clientY, stickerContainer);
-            
-            if (isPeeling) {
-              const deltaY = e.clientY - dragStartY;
-              const rect = stickerContainer.getBoundingClientRect();
-              const progressDelta = (deltaY / rect.height) * 100;
-              peelProgress = Math.max(0, Math.min(100, dragStartProgress + progressDelta));
-              updateTransferSheetPeel(peelProgress, stickerContainer);
-            }
-          });
-          
-          document.addEventListener('mouseup', () => {
-            if (isPeeling) {
-              isPeeling = false;
-              stickerContainer.classList.remove('peeling');
-              
-              // If peeled more than 80%, complete the peel
-              if (peelProgress > 80) {
-                peelProgress = 100;
-                updateTransferSheetPeel(100, stickerContainer);
-                setTimeout(() => {
-                  stickerMain.style.opacity = '0';
-                  flap.style.opacity = '0';
-                }, 300);
-              }
-            }
-          });
-          
-          // Scroll-based peeling
-          const handleScroll = () => {
-            if (!isPeeling && scrollPeelEnabled) {
-              const scrollY = window.scrollY || window.pageYOffset;
-              const scrollDelta = scrollY - lastScrollY;
-              
-              if (scrollDelta > 0) {
-                // Scrolling down = peel more
-                peelProgress = Math.min(100, peelProgress + scrollDelta * 0.5);
-              } else {
-                // Scrolling up = peel less (optional)
-                peelProgress = Math.max(0, peelProgress + scrollDelta * 0.3);
-              }
-              
-              updateTransferSheetPeel(peelProgress, stickerContainer);
-              lastScrollY = scrollY;
-              
-              // Complete peel if scrolled enough
-              if (peelProgress >= 100) {
-                scrollPeelEnabled = false;
-                stickerMain.style.opacity = '0';
-                flap.style.opacity = '0';
-              }
-            }
-          };
-          
-          // Enable scroll peeling after a short delay
-          setTimeout(() => {
-            scrollPeelEnabled = true;
-            lastScrollY = window.scrollY || window.pageYOffset;
-            window.addEventListener('scroll', handleScroll);
-          }, 500);
-          
           // Release memory once the image is loaded
           URL.revokeObjectURL(imgSrc);
         };
+        
+        previewEl.appendChild(stickerContainer);
       } else {
         const fallback = document.createElement("div");
         fallback.className = "order-upload-preview-fallback";
