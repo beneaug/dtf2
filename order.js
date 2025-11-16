@@ -9,8 +9,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const card = form.closest(".order-card") || document;
   const uploadInput = card.querySelector(".order-upload-input");
   const previewEl = card.querySelector(".order-upload-preview");
-  const stickerArtImg =
-    previewEl && previewEl.querySelector(".sticker-art");
   const tabs = Array.from(card.querySelectorAll(".order-tab"));
   const sizeSelect = form.querySelector('select[name="size"]');
   const transferNameInput = form.querySelector('input[name="transferName"]');
@@ -144,10 +142,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (totalSummaryEl) totalSummaryEl.textContent = formatPrice(total);
   }
 
-  // Artwork preview in the upload area (peel mockup)
+  // Artwork preview in the upload area
   function applyPreviewSizing() {
-    if (!previewEl || !stickerArtImg) return;
-    const img = stickerArtImg;
+    if (!previewEl) return;
+    const img = previewEl.querySelector("img");
+    if (!img) return;
 
     const label = (sizeSelect && sizeSelect.value) || '2" x 2"';
     // Map size labels to a base pixel dimension so sizes feel 1:1 relative.
@@ -168,17 +167,145 @@ document.addEventListener("DOMContentLoaded", () => {
     img.style.height = `${naturalH * scale}px`;
   }
 
+  // --- Sticker / transfer-sheet interactions ---
+
+  function clamp01(value) {
+    if (value < 0) return 0;
+    if (value > 1) return 1;
+    return value;
+  }
+
+  let currentTransferController = null;
+
+  function createTransferController(wrapper) {
+    if (!wrapper) return null;
+
+    let peel = 0;
+    let dragging = false;
+    let dragStartY = 0;
+    let peelAtDragStart = 0;
+
+    function applyPeel() {
+      const clamped = clamp01(peel);
+      wrapper.style.setProperty("--transfer-peel", clamped.toFixed(3));
+    }
+
+    function onPointerDown(event) {
+      dragging = true;
+      dragStartY = event.clientY;
+      peelAtDragStart = peel;
+      wrapper.classList.add("order-transfer--dragging");
+      if (wrapper.setPointerCapture && event.pointerId != null) {
+        try {
+          wrapper.setPointerCapture(event.pointerId);
+        } catch (_) {
+          // ignore
+        }
+      }
+    }
+
+    function onPointerMove(event) {
+      if (!dragging) return;
+      const clientY = event.clientY;
+      const deltaY = clientY - dragStartY;
+      const sensitivity = 260; // pixels of drag for full peel
+      peel = clamp01(peelAtDragStart + deltaY / -sensitivity);
+      applyPeel();
+    }
+
+    function onPointerUp(event) {
+      if (!dragging) return;
+      dragging = false;
+      wrapper.classList.remove("order-transfer--dragging");
+      if (wrapper.releasePointerCapture && event.pointerId != null) {
+        try {
+          wrapper.releasePointerCapture(event.pointerId);
+        } catch (_) {
+          // ignore
+        }
+      }
+    }
+
+    function onScroll() {
+      if (!document.body.contains(wrapper)) {
+        window.removeEventListener("scroll", onScroll);
+        return;
+      }
+      if (dragging) return;
+      const doc = document.documentElement;
+      const maxScrollable =
+        (doc.scrollHeight || 0) - (window.innerHeight || 0);
+      const denominator = Math.max(200, Math.min(800, maxScrollable || 0));
+      if (denominator <= 0) return;
+      const scrollY = window.scrollY || window.pageYOffset || 0;
+      const t = clamp01(scrollY / denominator);
+      // Let scroll gradually advance the peel, but don't snap it back.
+      if (t > peel) {
+        peel = t;
+        applyPeel();
+      }
+    }
+
+    wrapper.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
+    window.addEventListener("scroll", onScroll, { passive: true });
+
+    applyPeel();
+
+    return {
+      destroy() {
+        wrapper.removeEventListener("pointerdown", onPointerDown);
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerup", onPointerUp);
+        window.removeEventListener("pointercancel", onPointerUp);
+        window.removeEventListener("scroll", onScroll);
+      },
+    };
+  }
+
+  function initTransferPreview(previewRoot) {
+    if (!previewRoot) return;
+    const wrapper = previewRoot.querySelector(".order-sticker-wrapper");
+    if (!wrapper) return;
+    if (currentTransferController) {
+      currentTransferController.destroy();
+      currentTransferController = null;
+    }
+    currentTransferController = createTransferController(wrapper);
+  }
+
   if (uploadInput && previewEl) {
     uploadInput.addEventListener("change", () => {
       const file = uploadInput.files && uploadInput.files[0];
+      previewEl.innerHTML = "";
+      previewEl.classList.remove("order-upload-preview--visible");
+
       if (!file) return;
 
       if (file.type && file.type.startsWith("image/")) {
-        if (!stickerArtImg) return;
-        const objectUrl = URL.createObjectURL(file);
-        stickerArtImg.alt = file.name;
-        stickerArtImg.src = objectUrl;
-        stickerArtImg.onload = () => {
+        const img = document.createElement("img");
+        img.alt = file.name;
+        img.src = URL.createObjectURL(file);
+
+        // Wrap the uploaded art in a sticker + transfer sheet container
+        const wrapper = document.createElement("div");
+        wrapper.className = "order-sticker-wrapper";
+
+        const sheetShadow = document.createElement("div");
+        sheetShadow.className =
+          "order-transfer-sheet order-transfer-sheet--shadow";
+        const sheetFront = document.createElement("div");
+        sheetFront.className =
+          "order-transfer-sheet order-transfer-sheet--front";
+
+        wrapper.appendChild(img);
+        wrapper.appendChild(sheetShadow);
+        wrapper.appendChild(sheetFront);
+        previewEl.appendChild(wrapper);
+
+        img.onload = () => {
           applyPreviewSizing();
           // Actual artwork size calculation
           if (artSizeEl && sizeSelect) {
@@ -188,8 +315,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (match) {
               const boxW = parseFloat(match[1]);
               const boxH = parseFloat(match[2]);
-              const naturalW = stickerArtImg.naturalWidth || 1;
-              const naturalH = stickerArtImg.naturalHeight || 1;
+              const naturalW = img.naturalWidth || 1;
+              const naturalH = img.naturalHeight || 1;
               const aspect = naturalW / naturalH;
               const boxAspect = boxW / boxH;
 
@@ -209,9 +336,10 @@ document.addEventListener("DOMContentLoaded", () => {
             }
           }
           // Release memory once the image is loaded
-          URL.revokeObjectURL(objectUrl);
+          URL.revokeObjectURL(img.src);
+          initTransferPreview(previewEl);
         };
-      } else if (file) {
+      } else {
         const fallback = document.createElement("div");
         fallback.className = "order-upload-preview-fallback";
         fallback.textContent = file.name;
@@ -236,80 +364,6 @@ document.addEventListener("DOMContentLoaded", () => {
     qtyInput.addEventListener("input", updatePricingDisplay);
   }
   updatePricingDisplay();
-
-  // Interactive heat transfer peel mockup
-  const pointLight = document.querySelector("fePointLight");
-  const pointLightFlipped = document.getElementById("fePointLightFlipped");
-  const stickerContainer = document.querySelector(".sticker-container");
-  const draggable = document.querySelector(".draggable");
-
-  if (pointLight && pointLightFlipped && stickerContainer && draggable) {
-    let isDragging = false;
-    let dragOffsetX = 0;
-    let dragOffsetY = 0;
-
-    function getContainingBlockOffset(element) {
-      const containingBlock =
-        element.offsetParent || document.documentElement;
-      const containingBlockRect = containingBlock.getBoundingClientRect();
-      return {
-        left: containingBlockRect.left,
-        top: containingBlockRect.top,
-      };
-    }
-
-    function updateLightPosition(mouseX, mouseY) {
-      const rect = stickerContainer.getBoundingClientRect();
-      const relativeX = mouseX - rect.left;
-      const relativeY = mouseY - rect.top;
-      pointLight.setAttribute("x", relativeX);
-      pointLight.setAttribute("y", relativeY);
-      pointLightFlipped.setAttribute("x", relativeX);
-      pointLightFlipped.setAttribute("y", rect.height - relativeY);
-    }
-
-    function startDrag(e) {
-      isDragging = true;
-      const rect = draggable.getBoundingClientRect();
-      const containingBlockOffset = getContainingBlockOffset(draggable);
-
-      dragOffsetX = e.clientX - rect.left;
-      dragOffsetY = e.clientY - rect.top;
-
-      draggable.style.left =
-        rect.left - containingBlockOffset.left + "px";
-      draggable.style.top =
-        rect.top - containingBlockOffset.top + "px";
-    }
-
-    function updateDragPosition(e) {
-      if (isDragging) {
-        const containingBlockOffset = getContainingBlockOffset(draggable);
-        draggable.style.left =
-          e.clientX - dragOffsetX - containingBlockOffset.left + "px";
-        draggable.style.top =
-          e.clientY - dragOffsetY - containingBlockOffset.top + "px";
-      }
-    }
-
-    function stopDrag() {
-      isDragging = false;
-    }
-
-    draggable.addEventListener("mousedown", startDrag);
-    document.addEventListener("mouseup", stopDrag);
-    document.addEventListener("mousemove", (e) => {
-      updateLightPosition(e.clientX, e.clientY);
-      updateDragPosition(e);
-    });
-
-    // Initialize light in center of container
-    const rect = stickerContainer.getBoundingClientRect();
-    updateLightPosition(
-      rect.left + rect.width / 2,
-      rect.top + rect.height / 2
-    );
-  }
 
   // Mode tabs – just cosmetic for now, but we record the choice.
   let currentMode = "single-image";

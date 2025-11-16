@@ -367,17 +367,19 @@ body {
 .order-upload-preview {
   margin-top: 1.4rem;
   border-radius: 0.9rem;
-  background: radial-gradient(
-      circle at 0% 0%,
-      rgba(255, 255, 255, 0.04),
-      transparent 55%
-    ),
-    rgba(3, 4, 7, 0.96);
-  padding: 1rem;
-  min-height: 160px;
+  background: rgba(5, 6, 8, 0.9);
+  padding: 0.75rem;
+  min-height: 120px;
   display: none; /* toggled on when a file is present */
   align-items: center;
   justify-content: center;
+  position: relative;
+}
+
+.order-upload-preview img {
+  display: block;
+  max-width: none; /* sizing controlled via JS for 1:1 feel */
+  max-height: none;
 }
 
 .order-upload-preview--visible {
@@ -391,140 +393,64 @@ body {
   word-break: break-all;
 }
 
-/* Heat transfer peel mockup */
-.sticker-shell {
-  width: 100%;
-  max-width: 320px;
-  margin: 0 auto;
+/* --- Order page sticker / transfer sheet preview --- */
+
+:root {
+  /* 0 = transfer fully covering the art, 1 = fully peeled away */
+  --transfer-peel: 0;
 }
 
-.sticker-container {
+.order-sticker-wrapper {
   position: relative;
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  border-radius: 1.1rem;
-  padding: 0.9rem 1.1rem 1.4rem;
-  background:
-    radial-gradient(
-      circle at 8% 0%,
-      rgba(255, 255, 255, 0.26),
-      transparent 55%
-    ),
-    radial-gradient(
-      circle at 100% 100%,
-      rgba(58, 129, 235, 0.55),
-      transparent 60%
-    ),
-    radial-gradient(
-      circle at 0% 100%,
-      rgba(255, 113, 206, 0.5),
-      transparent 60%
-    ),
-    #050609;
-  box-shadow:
-    0 24px 50px rgba(0, 0, 0, 0.7),
-    0 0 0 1px rgba(255, 255, 255, 0.1);
-  overflow: hidden;
-}
-
-.sticker-surface {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
-
-.sticker-shadow {
-  position: absolute;
-  inset: auto 10% 4%;
-  height: 18%;
-  border-radius: 999px;
-  background: radial-gradient(
-    circle at 50% 0%,
-    rgba(0, 0, 0, 0.6),
-    transparent 60%
-  );
-  opacity: 0.85;
-  filter: blur(8px);
-}
-
-.draggable {
-  position: absolute;
-  left: 50%;
-  top: 54%;
-  transform: translate(-50%, -50%);
-  width: 70%;
-  aspect-ratio: 3 / 2;
-  border-radius: 0.9rem;
-  background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.6),
-      rgba(210, 220, 255, 0.95)
-    );
-  box-shadow:
-    0 16px 35px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(0, 0, 0, 0.5);
+  display: inline-block;
+  --transfer-peel: 0;
   cursor: grab;
-  filter: url("#stickerGloss");
-  transform-origin: center center;
 }
 
-.draggable:active {
+.order-sticker-wrapper img {
+  display: block;
+  border-radius: 0.9rem;
+}
+
+.order-sticker-wrapper.order-transfer--dragging {
   cursor: grabbing;
 }
 
-.sticker-film {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  border-radius: inherit;
-  overflow: hidden;
-}
-
-.sticker-film-top {
+.order-transfer-sheet {
   position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.95),
-    rgba(255, 255, 255, 0.4)
-  );
-  opacity: 0.42;
-  mix-blend-mode: screen;
+  inset: -10px;
+  border-radius: 1.1rem;
+  background: rgba(224, 224, 230, 0.7);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transform-origin: top center;
   pointer-events: none;
+  transition: transform 500ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 500ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    box-shadow 500ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
-.sticker-film-body {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  padding: 0.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.order-transfer-sheet--front {
+  z-index: 2;
+  transform: translateY(
+      calc(var(--transfer-peel) * -40%)
+    )
+    rotateX(calc(var(--transfer-peel) * 40deg));
 }
 
-.sticker-art-frame {
-  width: 100%;
-  height: 100%;
-  border-radius: 0.55rem;
-  background: rgba(5, 6, 8, 0.98);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.order-transfer-sheet--shadow {
+  z-index: 1;
+  filter: blur(10px);
+  opacity: calc(0.4 - var(--transfer-peel) * 0.3);
+  transform: translateY(
+      calc(10px - var(--transfer-peel) * 40px)
+    )
+    scale(calc(1.02 + var(--transfer-peel) * 0.06));
 }
 
-.sticker-art {
-  display: block;
-  max-width: none; /* sizing controlled via JS for 1:1 feel */
-  max-height: none;
-}
-
-.sticker-filters {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
+.order-sticker-wrapper.order-transfer--dragging .order-transfer-sheet {
+  transition: none;
 }
 
 .order-status {
