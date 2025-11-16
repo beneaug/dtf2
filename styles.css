@@ -1216,12 +1216,11 @@ body {
   width: 100%;
   height: 100%;
   left: 0;
-  top: calc(-100% - var(--sticker-p) - var(--sticker-p));
+  top: 0;
   clip-path: polygon(
-    var(--sticker-start) var(--sticker-start),
-    var(--sticker-end) var(--sticker-start),
-    var(--sticker-end) var(--sticker-start),
-    var(--sticker-start) var(--sticker-start)
+    100% 0%,
+    100% 0%,
+    100% 0%
   );
   transform: scaleY(-1);
   transition: all var(--sticker-peel-hover-easing);
@@ -1233,7 +1232,6 @@ body {
     100% 0%,
     100% calc(var(--sticker-peelback-hover) * 1.732)
   );
-  top: calc(-100% + var(--sticker-peelback-hover) * 1.732 - 1px);
   transition: all var(--sticker-peel-hover-easing);
 }
 
@@ -1243,7 +1241,6 @@ body {
     100% 0%,
     100% calc(var(--sticker-peelback-active) * 1.732)
   );
-  top: calc(-100% + var(--sticker-peelback-active) * 1.732 - 1px);
   transition: all var(--sticker-peel-easing);
 }
 
