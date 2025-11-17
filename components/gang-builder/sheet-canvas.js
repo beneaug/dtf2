@@ -105,8 +105,8 @@ export function create(container) {
     let scale = fitScale * zoomMultiplier;
     
     // Cap at 98% of canvas to prevent cutoff
-    const maxScaleX = (displayWidth * 0.98) / baseSheetWidthPx;
-    const maxScaleY = (displayHeight * 0.98) / baseSheetHeightPx;
+    const maxScaleX = (displayWidth * 1.4) / baseSheetWidthPx;
+    const maxScaleY = (displayHeight * 1.4) / baseSheetHeightPx;
     const maxScale = Math.min(maxScaleX, maxScaleY);
     if (scale > maxScale) {
       scale = maxScale;
