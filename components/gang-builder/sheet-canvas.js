@@ -97,6 +97,7 @@ export function create(container) {
   let containerWidth = 0;
   let containerHeight = 0;
   let isResizing = false; // Prevent recursive resize calls
+  let currentScale = 1; // Store the current scale to ensure consistency
   
   // Resize canvas to fit container with high DPI support
   function resizeCanvas() {
@@ -136,10 +137,14 @@ export function create(container) {
       const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
       
       // Calculate scale based on FIXED container size (not canvas)
+      // Use Math.min to maintain aspect ratio - this prevents warping
       const fitScaleX = (containerW * 0.95) / baseSheetWidthPx;
       const fitScaleY = (containerH * 0.95) / baseSheetHeightPx;
-      const baseScale = Math.min(fitScaleX, fitScaleY);
+      const baseScale = Math.min(fitScaleX, fitScaleY); // Always use min to maintain aspect ratio
       const scale = baseScale * zoomLevel;
+      
+      // Store scale for render function to use consistently
+      currentScale = scale;
       
       const sheetWidthPx = baseSheetWidthPx * scale;
       const sheetHeightPx = baseSheetHeightPx * scale;
@@ -156,6 +161,7 @@ export function create(container) {
       canvas.style.height = canvasH + 'px';
     } else {
       // No sheet size - canvas matches container
+      currentScale = 1; // Default scale when no sheet
       canvas.width = containerW * dpr;
       canvas.height = containerH * dpr;
       canvas.style.width = containerW + 'px';
@@ -188,30 +194,19 @@ export function create(container) {
     const baseSheetWidthPx = convertInchesToPixels(sheetSize.widthIn);
     const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
     
-    // ALWAYS use container dimensions for scale calculation (not canvas)
-    // Container is fixed at wrapper size, ensuring consistent scaling
-    const containerW = containerWidth || 100;
-    const containerH = containerHeight || 100;
-    
-    // Calculate base scale to fit in FIXED container size
-    const fitScaleX = (containerW * 0.95) / baseSheetWidthPx;
-    const fitScaleY = (containerH * 0.95) / baseSheetHeightPx;
-    const baseScale = Math.min(fitScaleX, fitScaleY);
-    
-    // Apply zoom level
-    const scale = baseScale * zoomLevel;
+    // Use the stored scale from resizeCanvas to ensure consistency
+    // This prevents warping by using the exact same scale calculation
+    const scale = currentScale;
 
     const sheetWidthPx = baseSheetWidthPx * scale;
     const sheetHeightPx = baseSheetHeightPx * scale;
     
-    // Position sheet - center horizontally and vertically when zoomed, top-aligned when fitting
+    // Position sheet - always top-aligned so top is visible, center horizontally
     const paddingPx = 32; // 2rem = 32px
     // Center horizontally
     const offsetX = Math.max(paddingPx, (canvasWidth - sheetWidthPx) / 2);
-    // Center vertically if sheet is smaller than canvas, otherwise top-align for scrolling
-    const offsetY = sheetHeightPx < canvasHeight 
-      ? (canvasHeight - sheetHeightPx) / 2 
-      : paddingPx;
+    // ALWAYS top-align vertically so the top of the sheet is visible and scrollable
+    const offsetY = paddingPx;
 
     // Draw grid (subtle)
     if (state.snapIncrement > 0) {
