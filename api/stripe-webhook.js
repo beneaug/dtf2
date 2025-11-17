@@ -79,48 +79,35 @@ module.exports = (req, res) => {
       const totalPriceCents =
         m.totalPriceCents != null ? parseInt(m.totalPriceCents, 10) : null;
       
-      // Extract gang sheet data from storage table using ID from metadata
-      let gangSheetData = null;
-      const gangSheetDataId = m.gangSheetDataId || null;
+      // Check if we have a temp order ID - means order was created before checkout
+      const tempOrderId = m.tempOrderId ? parseInt(m.tempOrderId, 10) : null;
+      let existingOrder = null;
       
-      if (gangSheetDataId) {
-        console.log("Retrieving gang_sheet_data from storage table, ID:", gangSheetDataId);
+      if (tempOrderId) {
+        console.log("Found temp order ID:", tempOrderId, "- will update existing order");
         try {
-          const client = await pool.connect();
+          const checkClient = await pool.connect();
           try {
-            const result = await client.query(
-              `SELECT data FROM gang_sheet_data_storage WHERE id = $1`,
-              [gangSheetDataId]
+            const checkResult = await checkClient.query(
+              `SELECT id, gang_sheet_data, stripe_session_id FROM dtf_orders WHERE id = $1`,
+              [tempOrderId]
             );
-            if (result.rows.length > 0 && result.rows[0].data) {
-              gangSheetData = result.rows[0].data;
-              console.log("✓ Retrieved gang_sheet_data from storage table");
+            if (checkResult.rows.length > 0) {
+              existingOrder = checkResult.rows[0];
+              const hasGangSheetData = existingOrder.gang_sheet_data !== null;
+              console.log("✓ Found existing order. Has gang_sheet_data:", hasGangSheetData);
+              if (!hasGangSheetData) {
+                console.error("WARNING: Existing order has NULL gang_sheet_data!");
+              }
             } else {
-              console.error("ERROR: gang_sheet_data not found in storage table for ID:", gangSheetDataId);
+              console.error("ERROR: Temp order not found:", tempOrderId);
             }
           } finally {
-            client.release();
+            checkClient.release();
           }
         } catch (dbErr) {
-          console.error("Failed to retrieve gang sheet data from storage table:", dbErr);
-          console.error("Error details:", dbErr.message);
+          console.error("Failed to check for existing order:", dbErr);
         }
-      }
-      
-      // Fallback: try to parse from metadata (for backwards compatibility with old orders)
-      if (!gangSheetData && m.gangSheetData) {
-        try {
-          gangSheetData = JSON.parse(m.gangSheetData);
-          console.log("Retrieved gang_sheet_data from metadata (legacy)");
-        } catch (e) {
-          console.error("Failed to parse gangSheetData from metadata:", e);
-        }
-      }
-      
-      if (gangSheetData) {
-        console.log("Gang sheet data retrieved, size:", JSON.stringify(gangSheetData).length, "chars");
-      } else {
-        console.log("No gang sheet data found for this order");
       }
 
       // Extract shipping address from session
@@ -227,22 +214,35 @@ module.exports = (req, res) => {
         const finalShippingAddressJson = shippingAddress ? JSON.stringify(shippingAddress) : null;
         const mode = m.mode || "single-image";
         
-        // Create or update the order with gang_sheet_data
-        const hasGangSheetData = gangSheetData !== null;
-        console.log("Creating/updating order. Has gang_sheet_data:", hasGangSheetData);
+        let result;
         
-        const query = hasGangSheetData
-          ? `INSERT INTO dtf_orders
-               (mode, size, quantity, transfer_name, garment_color, notes,
-                files, unit_price_cents, total_price_cents, stripe_session_id, status, shipping_address, gang_sheet_data)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, $12::jsonb)
-             ON CONFLICT (stripe_session_id) 
-             DO UPDATE SET 
-               shipping_address = COALESCE(EXCLUDED.shipping_address, dtf_orders.shipping_address),
-               status = COALESCE(dtf_orders.status, EXCLUDED.status),
-               gang_sheet_data = COALESCE(EXCLUDED.gang_sheet_data, dtf_orders.gang_sheet_data)
-             RETURNING id, shipping_address, gang_sheet_data`
-          : `INSERT INTO dtf_orders
+        // If we have an existing order (created before checkout), just update it
+        if (existingOrder) {
+          console.log("Updating existing order", existingOrder.id, "with Stripe session", session.id);
+          
+          // Update the existing order - preserve gang_sheet_data (it's already saved)
+          result = await client.query(
+            `UPDATE dtf_orders
+             SET stripe_session_id = $1,
+                 shipping_address = COALESCE($2, shipping_address),
+                 status = COALESCE(status, 'pending')
+             WHERE id = $3
+             RETURNING id, shipping_address, gang_sheet_data`,
+            [session.id, finalShippingAddressJson, existingOrder.id]
+          );
+          
+          if (result.rowCount > 0) {
+            const savedGangSheetData = result.rows[0].gang_sheet_data;
+            console.log("✓ Updated existing order. Has gang_sheet_data:", savedGangSheetData ? "YES" : "NO - NULL!");
+            if (!savedGangSheetData && existingOrder.gang_sheet_data) {
+              console.error("ERROR: gang_sheet_data was lost during update!");
+            }
+          }
+        } else {
+          // No existing order - create new one (fallback for non-gang-sheet orders)
+          console.log("Creating new order (no existing order found)");
+          
+          const query = `INSERT INTO dtf_orders
                (mode, size, quantity, transfer_name, garment_color, notes,
                 files, unit_price_cents, total_price_cents, stripe_session_id, status, shipping_address)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11)
@@ -251,48 +251,22 @@ module.exports = (req, res) => {
                shipping_address = COALESCE(EXCLUDED.shipping_address, dtf_orders.shipping_address),
                status = COALESCE(dtf_orders.status, EXCLUDED.status)
              RETURNING id, shipping_address`;
-        
-        const params = hasGangSheetData
-          ? [
-              mode,
-              size,
-              quantity,
-              transferName,
-              garmentColor,
-              notes,
-              JSON.stringify(files),
-              unitPriceCents,
-              totalPriceCents,
-              session.id,
-              finalShippingAddressJson,
-              gangSheetData, // Pass object directly, ::jsonb cast in SQL
-            ]
-          : [
-              mode,
-              size,
-              quantity,
-              transferName,
-              garmentColor,
-              notes,
-              JSON.stringify(files),
-              unitPriceCents,
-              totalPriceCents,
-              session.id,
-              finalShippingAddressJson,
-            ];
-        
-        const result = await client.query(query, params);
-        
-        if (result.rowCount > 0 && hasGangSheetData) {
-          const savedHasData = result.rows[0].gang_sheet_data !== null;
-          console.log("✓ Order saved. Has gang_sheet_data:", savedHasData);
-          if (!savedHasData) {
-            console.error("ERROR: gang_sheet_data was not saved to order!");
-            console.error("  Data we tried to save:", gangSheetData ? "present" : "null");
-          } else {
-            const dataPreview = JSON.stringify(result.rows[0].gang_sheet_data).substring(0, 100);
-            console.log("  Data preview:", dataPreview);
-          }
+          
+          const params = [
+            mode,
+            size,
+            quantity,
+            transferName,
+            garmentColor,
+            notes,
+            JSON.stringify(files),
+            unitPriceCents,
+            totalPriceCents,
+            session.id,
+            finalShippingAddressJson,
+          ];
+          
+          result = await client.query(query, params);
         }
 
         if (result && result.rowCount > 0) {

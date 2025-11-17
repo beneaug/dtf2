@@ -85,45 +85,13 @@ module.exports = (req, res) => {
       const garmentColor = fields.garmentColor || null;
       const notes = fields.notes || null;
       
-      // Extract gang sheet data if present - store in temporary table
-      let gangSheetDataId = null;
+      // Extract gang sheet data if present
+      let gangSheetData = null;
+      let tempOrderId = null;
       if (fields.gangSheetData) {
         try {
-          const gangSheetData = JSON.parse(fields.gangSheetData);
-          
-          // Store in a simple temporary storage table with UUID
-          // This avoids Stripe's 500 character metadata limit
-          if (pool && gangSheetData) {
-            try {
-              const client = await pool.connect();
-              try {
-                // Create storage table if it doesn't exist (idempotent)
-                await client.query(`
-                  CREATE TABLE IF NOT EXISTS gang_sheet_data_storage (
-                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                    data JSONB NOT NULL,
-                    created_at TIMESTAMP DEFAULT NOW()
-                  )
-                `);
-                
-                // Insert the data
-                const result = await client.query(
-                  `INSERT INTO gang_sheet_data_storage (data) VALUES ($1::jsonb) RETURNING id`,
-                  [gangSheetData]
-                );
-                
-                if (result.rows.length > 0) {
-                  gangSheetDataId = result.rows[0].id;
-                  console.log("✓ Stored gang sheet data with ID:", gangSheetDataId);
-                }
-              } finally {
-                client.release();
-              }
-            } catch (dbErr) {
-              console.error("Failed to store gang sheet data:", dbErr);
-              console.error("Error details:", dbErr.message);
-            }
-          }
+          gangSheetData = JSON.parse(fields.gangSheetData);
+          console.log("Parsed gang sheet data, size:", JSON.stringify(gangSheetData).length, "chars");
         } catch (e) {
           console.error("Failed to parse gangSheetData:", e);
         }
@@ -142,11 +110,85 @@ module.exports = (req, res) => {
           ? Math.round(totalPrice * 100)
           : null;
 
+      // Create order record BEFORE Stripe checkout with all data including gang_sheet_data
+      // This ensures the data is saved immediately
+      if (pool) {
+        try {
+          const client = await pool.connect();
+          try {
+            // Create order with temporary session_id, will be updated in webhook
+            const tempSessionId = `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            const hasGangSheetData = gangSheetData !== null;
+            
+            console.log("Creating order record before checkout. Has gang_sheet_data:", hasGangSheetData);
+            
+            const insertQuery = hasGangSheetData
+              ? `INSERT INTO dtf_orders
+                   (mode, size, quantity, transfer_name, garment_color, notes,
+                    files, unit_price_cents, total_price_cents, stripe_session_id, status, gang_sheet_data)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11::jsonb)
+                 RETURNING id, gang_sheet_data`
+              : `INSERT INTO dtf_orders
+                   (mode, size, quantity, transfer_name, garment_color, notes,
+                    files, unit_price_cents, total_price_cents, stripe_session_id, status)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending')
+                 RETURNING id`;
+            
+            const insertParams = hasGangSheetData
+              ? [
+                  mode,
+                  size,
+                  quantity,
+                  transferName,
+                  garmentColor,
+                  notes,
+                  JSON.stringify(uploadedFiles),
+                  unitPriceCents,
+                  totalPriceCents,
+                  tempSessionId,
+                  gangSheetData,
+                ]
+              : [
+                  mode,
+                  size,
+                  quantity,
+                  transferName,
+                  garmentColor,
+                  notes,
+                  JSON.stringify(uploadedFiles),
+                  unitPriceCents,
+                  totalPriceCents,
+                  tempSessionId,
+                ];
+            
+            const insertResult = await client.query(insertQuery, insertParams);
+            
+            if (insertResult.rows.length > 0) {
+              tempOrderId = insertResult.rows[0].id;
+              const savedGangSheetData = hasGangSheetData ? insertResult.rows[0].gang_sheet_data : null;
+              console.log("✓ Created order record ID:", tempOrderId, "with temp session_id:", tempSessionId);
+              if (hasGangSheetData) {
+                console.log("  gang_sheet_data saved:", savedGangSheetData ? "YES" : "NO - NULL!");
+                if (!savedGangSheetData) {
+                  console.error("ERROR: gang_sheet_data was not saved!");
+                }
+              }
+            }
+          } finally {
+            client.release();
+          }
+        } catch (dbErr) {
+          console.error("Failed to create order record:", dbErr);
+          console.error("Error details:", dbErr.message);
+          // Continue anyway - webhook will create it
+        }
+      }
+
       let checkoutUrl = null;
       if (stripe && totalPriceCents && totalPriceCents > 0) {
         const origin = (req.headers.origin || "").replace(/\/$/, "");
         
-        // Build metadata - include gang sheet data ID if we have it
+        // Build metadata - include temp order ID so webhook can find and update it
         const metadata = {
           mode,
           size,
@@ -161,9 +203,9 @@ module.exports = (req, res) => {
             totalPriceCents != null ? String(totalPriceCents) : "",
         };
         
-        // If we stored gang sheet data, include the storage ID (UUID is short)
-        if (gangSheetDataId) {
-          metadata.gangSheetDataId = String(gangSheetDataId);
+        // Include temp order ID so webhook can update the existing record
+        if (tempOrderId) {
+          metadata.tempOrderId = String(tempOrderId);
         }
         
         const session = await stripe.checkout.sessions.create({
