@@ -17,7 +17,7 @@ export function create(container) {
     <div class="gang-canvas-wrapper" id="gang-canvas-wrapper">
         <div class="gang-zoom-controls">
           <button class="gang-zoom-btn" id="gang-zoom-out" aria-label="Zoom out">−</button>
-          <span class="gang-zoom-level" id="gang-zoom-level">75%</span>
+          <span class="gang-zoom-level" id="gang-zoom-level">125%</span>
           <button class="gang-zoom-btn" id="gang-zoom-in" aria-label="Zoom in">+</button>
         </div>
       <div class="gang-canvas-container" id="gang-canvas-container">
@@ -49,8 +49,23 @@ export function create(container) {
   const initialState = store.getState();
   let lastSheetSizeId = initialState.selectedSheetSizeId;
   
-  // Zoom state (1.0 = 100%, 0.75 = 75%, etc.)
-  let zoomLevel = 0.75; // Start at 75% for default preview
+  // Get default zoom level for a sheet size
+  function getDefaultZoomForSheetSize(sheetSizeId) {
+    const zoomMap = {
+      "22x12": 1.25,   // 125%
+      "22x24": 1.5,    // 150%
+      "22x60": 1.75,   // 175%
+      "22x120": 2.0,   // 200%
+      "22x180": 2.0,   // 200%
+    };
+    return zoomMap[sheetSizeId] || 1.25; // Default to 125% if not found
+  }
+  
+  // Initialize zoom to default for current sheet size
+  const initialZoom = getDefaultZoomForSheetSize(initialState.selectedSheetSizeId);
+  
+  // Zoom state (1.0 = 100%, 1.25 = 125%, etc.)
+  let zoomLevel = initialZoom;
 
   let isDragging = false;
   let dragStartX = 0;
@@ -81,12 +96,18 @@ export function create(container) {
   // Store container dimensions for scale calculations
   let containerWidth = 0;
   let containerHeight = 0;
+  let isResizing = false; // Prevent recursive resize calls
   
   // Resize canvas to fit container with high DPI support
   function resizeCanvas() {
+    // Prevent recursive calls
+    if (isResizing) return;
+    
     const rect = canvasContainer.getBoundingClientRect();
     // Ensure we have valid dimensions
     if (rect.width > 0 && rect.height > 0) {
+      isResizing = true;
+      
       // Store container dimensions
       containerWidth = rect.width;
       containerHeight = rect.height;
@@ -106,7 +127,7 @@ export function create(container) {
         const fitScaleY = (containerHeight * 0.95) / baseSheetHeightPx;
         const baseScale = Math.min(fitScaleX, fitScaleY);
         
-        // Apply zoom level
+        // Apply zoom level - use current zoomLevel value directly, no accumulation
         const scale = baseScale * zoomLevel;
         
         const sheetWidthPx = baseSheetWidthPx * scale;
@@ -141,6 +162,7 @@ export function create(container) {
       ctx.scale(dpr, dpr);
       
       render();
+      isResizing = false;
     } else {
       // Retry after a short delay if container isn't sized yet
       setTimeout(() => resizeCanvas(), 50);
@@ -512,18 +534,27 @@ export function create(container) {
     zoomLevelDisplay.textContent = Math.round(zoomLevel * 100) + "%";
   }
 
+  let isZooming = false; // Prevent recursive zoom calls
+  
   function setZoom(level) {
+    // Prevent recursive calls
+    if (isZooming) return;
+    
     // Clamp zoom between 0.25x (25%) and 4x (400%)
     const newZoom = Math.max(0.25, Math.min(4.0, level));
-    if (newZoom === zoomLevel) return; // No change needed
+    if (Math.abs(newZoom - zoomLevel) < 0.001) return; // No significant change
     
+    isZooming = true;
     zoomLevel = newZoom;
     updateZoomDisplay();
+    
     // Resize canvas to accommodate new zoom level
     resizeCanvas();
+    
     // Reposition controls after resize (they should stay fixed)
     requestAnimationFrame(() => {
       positionZoomControls();
+      isZooming = false;
     });
   }
 
@@ -557,15 +588,18 @@ export function create(container) {
     const sheetSizeChanged = lastSheetSizeId !== null && lastSheetSizeId !== state.selectedSheetSizeId;
     if (sheetSizeChanged) {
       lastSheetSizeId = state.selectedSheetSizeId;
-      // FORCE reset zoom to default (75%) when sheet size changes - this MUST happen
-      zoomLevel = 0.75;
+      // FORCE reset zoom to recommended level for this sheet size
+      const defaultZoom = getDefaultZoomForSheetSize(state.selectedSheetSizeId);
+      zoomLevel = defaultZoom;
       updateZoomDisplay();
+      
       // Force container dimension refresh - get fresh measurements
       const rect = canvasContainer.getBoundingClientRect();
       if (rect.width > 0 && rect.height > 0) {
         containerWidth = rect.width;
         containerHeight = rect.height;
       }
+      
       // Wait a frame to ensure DOM is updated, then resize
       requestAnimationFrame(() => {
         // Get fresh measurements again after DOM update
@@ -574,11 +608,12 @@ export function create(container) {
           containerWidth = freshRect.width;
           containerHeight = freshRect.height;
         }
-        // Resize canvas when sheet size changes - this will recalculate everything
+        // Resize canvas when sheet size changes - this will recalculate everything with new zoom
         resizeCanvas();
         // Reposition controls after resize
         positionZoomControls();
       });
+      
       // Scroll to top after resize completes
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
