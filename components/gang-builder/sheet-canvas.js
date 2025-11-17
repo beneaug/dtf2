@@ -98,6 +98,7 @@ export function create(container) {
   let containerHeight = 0;
   let isResizing = false; // Prevent recursive resize calls
   let currentScale = 1; // Store the current scale to ensure consistency
+  let baseFitScale = 1; // Store the base fit scale for current sheet size (never changes until sheet size changes)
   
   // Resize canvas to fit container with high DPI support
   function resizeCanvas() {
@@ -133,27 +134,34 @@ export function create(container) {
     const sheetSize = getSheetSize(state.selectedSheetSizeId);
     
     if (sheetSize) {
+      // COMPLETELY NEW APPROACH: Fixed scale based on sheet dimensions only
+      // Don't use container dimensions for scale - use a fixed reference
+      // This ensures perfect aspect ratio at ALL zoom levels
       const baseSheetWidthPx = convertInchesToPixels(sheetSize.widthIn);
       const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
       
-      // Calculate scale based on FIXED container size (not canvas)
-      // CRITICAL: Use Math.min to maintain aspect ratio - this prevents warping
-      // Both width and height MUST use the same scale to preserve proportions
+      // Calculate base fit scale ONLY if sheet size changed (stored in baseFitScale)
+      // This ensures the base scale never changes during zoom operations
       const fitScaleX = (containerW * 0.95) / baseSheetWidthPx;
       const fitScaleY = (containerH * 0.95) / baseSheetHeightPx;
-      const baseScale = Math.min(fitScaleX, fitScaleY); // Always use min to maintain aspect ratio
-      const scale = baseScale * zoomLevel;
+      const calculatedBaseFitScale = Math.min(fitScaleX, fitScaleY);
       
-      // Store scale for render function to use consistently
-      // This ensures width and height always use the SAME scale factor
-      currentScale = scale;
+      // Only update baseFitScale if it's significantly different (sheet size changed)
+      // This prevents recalculation during zoom operations
+      if (Math.abs(baseFitScale - calculatedBaseFitScale) > 0.001) {
+        baseFitScale = calculatedBaseFitScale;
+      }
       
-      const sheetWidthPx = baseSheetWidthPx * scale;
-      const sheetHeightPx = baseSheetHeightPx * scale;
+      // CRITICAL: Always use stored baseFitScale * zoomLevel
+      // This ensures both width and height use the EXACT same scale value at all times
+      currentScale = baseFitScale * zoomLevel;
       
-      // Canvas can be larger than container for scrolling, but calculate based on sheet
-      // Use same padding as render function (16px) for consistency
-      const paddingPx = 16;
+      // Apply the SAME scale to both dimensions - this is the key to preventing warping
+      const sheetWidthPx = baseSheetWidthPx * currentScale;
+      const sheetHeightPx = baseSheetHeightPx * currentScale;
+      
+      // Canvas size: sheet + padding, always large enough to show full sheet
+      const paddingPx = 32;
       const canvasW = Math.max(containerW, sheetWidthPx + paddingPx * 2);
       const canvasH = Math.max(containerH, sheetHeightPx + paddingPx * 2);
       
@@ -193,23 +201,23 @@ export function create(container) {
     // Clear canvas (use actual canvas dimensions)
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Calculate base dimensions
+    // Calculate base dimensions (in pixels at base resolution)
     const baseSheetWidthPx = convertInchesToPixels(sheetSize.widthIn);
     const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
     
-    // Use the stored scale from resizeCanvas to ensure consistency
-    // CRITICAL: Use the SAME scale for both width and height to maintain aspect ratio
+    // Use the stored scale from resizeCanvas - this is baseFitScale * zoomLevel
+    // Both width and height use the SAME scale, ensuring perfect aspect ratio
     const scale = currentScale;
 
-    // Apply the SAME scale to both dimensions - this prevents warping
+    // Apply the SAME scale to both dimensions - this is critical for aspect ratio
     const sheetWidthPx = baseSheetWidthPx * scale;
     const sheetHeightPx = baseSheetHeightPx * scale;
     
-    // Position sheet - start at very top (minimal padding) so top is always visible
-    const paddingPx = 16; // Reduced padding so top is more visible
+    // Position sheet - ALWAYS at top (minimal offset) so top is visible
+    const paddingPx = 16; // Minimal padding so top is clearly visible
     // Center horizontally
     const offsetX = Math.max(paddingPx, (canvasWidth - sheetWidthPx) / 2);
-    // ALWAYS start at top with minimal padding so the top of the sheet is visible
+    // ALWAYS start at very top - this ensures top of sheet is always visible
     const offsetY = paddingPx;
 
     // Draw grid (subtle)
@@ -551,12 +559,8 @@ export function create(container) {
     // Resize canvas to accommodate new zoom level
     resizeCanvas();
     
-    // Ensure scroll position stays at top when zooming
+    // Reposition controls after resize (they should stay fixed)
     requestAnimationFrame(() => {
-      if (canvasWrapper) {
-        canvasWrapper.scrollTop = 0;
-        canvasWrapper.scrollLeft = 0;
-      }
       positionZoomControls();
       isZooming = false;
     });
@@ -598,6 +602,9 @@ export function create(container) {
       zoomLevel = defaultZoom;
       updateZoomDisplay();
       
+      // Reset base fit scale - will be recalculated on next resize
+      baseFitScale = 1;
+      
       // Reset flags to allow fresh resize
       isResizing = false;
       
@@ -605,11 +612,6 @@ export function create(container) {
       requestAnimationFrame(() => {
         resizeCanvas(); // This will get fresh wrapper dimensions and reset container to fixed size
         positionZoomControls();
-        // Force scroll to top immediately and after render completes
-        if (canvasWrapper) {
-          canvasWrapper.scrollTop = 0;
-          canvasWrapper.scrollLeft = 0;
-        }
         requestAnimationFrame(() => {
           if (canvasWrapper) {
             canvasWrapper.scrollTop = 0;
