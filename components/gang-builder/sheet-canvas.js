@@ -14,14 +14,14 @@ import { convertInchesToPixels, convertPixelsToInches, snapToGrid, isWithinBound
  */
 export function create(container) {
   container.innerHTML = `
-    <div class="gang-canvas-wrapper" id="gang-canvas-wrapper">
+    <div class="gang-canvas-wrapper">
       <div class="gang-canvas-container" id="gang-canvas-container">
         <canvas id="gang-canvas"></canvas>
-      </div>
-      <div class="gang-zoom-controls">
-        <button class="gang-zoom-btn" id="gang-zoom-out" aria-label="Zoom out">−</button>
-        <span class="gang-zoom-level" id="gang-zoom-level">150%</span>
-        <button class="gang-zoom-btn" id="gang-zoom-in" aria-label="Zoom in">+</button>
+        <div class="gang-zoom-controls">
+          <button class="gang-zoom-btn" id="gang-zoom-out" aria-label="Zoom out">−</button>
+          <span class="gang-zoom-level" id="gang-zoom-level">150%</span>
+          <button class="gang-zoom-btn" id="gang-zoom-in" aria-label="Zoom in">+</button>
+        </div>
       </div>
     </div>
   `;

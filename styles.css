@@ -1644,13 +1644,13 @@ body {
   justify-content: center;
   padding: 2rem;
   min-height: 400px;
-  overflow: auto; /* Allow scrolling if sheet is larger than viewport */
-  position: relative; /* For absolute positioning of zoom controls */
+  overflow: auto !important; /* Force scrolling if sheet is larger than viewport */
+  position: relative;
 }
 
 .gang-canvas-container {
-  flex: 1;
-  min-width: 0;
+  width: 100%;
+  height: 100%;
   min-height: 400px;
   position: relative;
   background: rgba(5, 6, 8, 0.3);
@@ -1658,6 +1658,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0; /* Prevent container from shrinking */
 }
 
 .gang-zoom-controls {
@@ -1670,7 +1671,9 @@ body {
   background: rgba(0, 0, 0, 0.7);
   padding: 0.5rem;
   border-radius: 0.5rem;
-  z-index: 10;
+  z-index: 1000;
+  pointer-events: auto;
+  /* Fixed to top-right of canvas container, doesn't scroll with content */
 }
 
 .gang-zoom-btn {
