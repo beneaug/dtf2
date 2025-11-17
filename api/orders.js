@@ -5,6 +5,12 @@
 const Busboy = require("busboy");
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const Stripe = require("stripe");
+const { Pool } = require("pg");
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 3,
+});
 
 const s3 = new S3Client({
   region: process.env.AWS_S3_REGION,
@@ -81,9 +87,49 @@ module.exports = (req, res) => {
       
       // Extract gang sheet data if present
       let gangSheetData = null;
+      let preOrderId = null;
       if (fields.gangSheetData) {
         try {
           gangSheetData = JSON.parse(fields.gangSheetData);
+          
+          // Store gang sheet data in database BEFORE Stripe checkout
+          // This avoids Stripe's 500 character metadata limit
+          if (pool && gangSheetData) {
+            try {
+              const client = await pool.connect();
+              try {
+                const gangSheetDataJson = JSON.stringify(gangSheetData);
+                const result = await client.query(
+                  `INSERT INTO dtf_orders
+                     (mode, size, quantity, transfer_name, garment_color, notes,
+                      files, unit_price_cents, total_price_cents, status, gang_sheet_data)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10)
+                   RETURNING id`,
+                  [
+                    mode,
+                    size,
+                    quantity,
+                    transferName,
+                    garmentColor,
+                    notes,
+                    JSON.stringify(uploadedFiles),
+                    unitPriceCents,
+                    totalPriceCents,
+                    gangSheetDataJson,
+                  ]
+                );
+                if (result.rows.length > 0) {
+                  preOrderId = result.rows[0].id;
+                  console.log("Created pre-order with gang sheet data, ID:", preOrderId);
+                }
+              } finally {
+                client.release();
+              }
+            } catch (dbErr) {
+              console.error("Failed to store gang sheet data in database:", dbErr);
+              // Continue anyway - webhook will try to handle it
+            }
+          }
         } catch (e) {
           console.error("Failed to parse gangSheetData:", e);
         }
@@ -105,6 +151,27 @@ module.exports = (req, res) => {
       let checkoutUrl = null;
       if (stripe && totalPriceCents && totalPriceCents > 0) {
         const origin = (req.headers.origin || "").replace(/\/$/, "");
+        
+        // Build metadata - only include order ID reference if we have gang sheet data
+        const metadata = {
+          mode,
+          size,
+          quantity: String(quantity),
+          transferName: transferName || "",
+          garmentColor: garmentColor || "",
+          notes: notes || "",
+          files: JSON.stringify(uploadedFiles),
+          unitPriceCents:
+            unitPriceCents != null ? String(unitPriceCents) : "",
+          totalPriceCents:
+            totalPriceCents != null ? String(totalPriceCents) : "",
+        };
+        
+        // If we stored gang sheet data, only include the order ID reference
+        if (preOrderId) {
+          metadata.preOrderId = String(preOrderId);
+        }
+        
         const session = await stripe.checkout.sessions.create({
           mode: "payment",
           payment_method_types: ["card"],
@@ -127,20 +194,7 @@ module.exports = (req, res) => {
           shipping_address_collection: {
             allowed_countries: ["US", "CA"],
           },
-          metadata: {
-            mode,
-            size,
-            quantity: String(quantity),
-            transferName: transferName || "",
-            garmentColor: garmentColor || "",
-            notes: notes || "",
-            files: JSON.stringify(uploadedFiles),
-            unitPriceCents:
-              unitPriceCents != null ? String(unitPriceCents) : "",
-            totalPriceCents:
-              totalPriceCents != null ? String(totalPriceCents) : "",
-            ...(gangSheetData ? { gangSheetData: JSON.stringify(gangSheetData) } : {}),
-          },
+          metadata,
           success_url:
             process.env.STRIPE_SUCCESS_URL ||
             `${origin}/order?success=1&session_id={CHECKOUT_SESSION_ID}`,

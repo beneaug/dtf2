@@ -79,9 +79,33 @@ module.exports = (req, res) => {
       const totalPriceCents =
         m.totalPriceCents != null ? parseInt(m.totalPriceCents, 10) : null;
       
-      // Extract gang sheet data if present
+      // Extract gang sheet data - either from metadata (legacy) or from pre-order
       let gangSheetData = null;
-      if (m.gangSheetData) {
+      const preOrderId = m.preOrderId ? parseInt(m.preOrderId, 10) : null;
+      
+      // If we have a pre-order ID, retrieve gang sheet data from database
+      if (preOrderId) {
+        try {
+          const client = await pool.connect();
+          try {
+            const result = await client.query(
+              `SELECT gang_sheet_data FROM dtf_orders WHERE id = $1`,
+              [preOrderId]
+            );
+            if (result.rows.length > 0 && result.rows[0].gang_sheet_data) {
+              gangSheetData = result.rows[0].gang_sheet_data;
+              console.log("Retrieved gang sheet data from pre-order:", preOrderId);
+            }
+          } finally {
+            client.release();
+          }
+        } catch (dbErr) {
+          console.error("Failed to retrieve gang sheet data from pre-order:", dbErr);
+        }
+      }
+      
+      // Fallback: try to parse from metadata (for backwards compatibility)
+      if (!gangSheetData && m.gangSheetData) {
         try {
           gangSheetData = JSON.parse(m.gangSheetData);
         } catch (e) {
@@ -191,62 +215,90 @@ module.exports = (req, res) => {
         }
         
         const finalShippingAddressJson = shippingAddress ? JSON.stringify(shippingAddress) : null;
+        const mode = m.mode || "single-image";
         
-        // Build the query - include gang_sheet_data if it exists
-        const hasGangSheetData = gangSheetData !== null;
-        const gangSheetDataJson = gangSheetData ? JSON.stringify(gangSheetData) : null;
+        // If we have a pre-order ID, update that record instead of creating a new one
+        let result;
+        if (preOrderId) {
+          console.log("Updating pre-order", preOrderId, "with Stripe session", session.id);
+          result = await client.query(
+            `UPDATE dtf_orders
+             SET stripe_session_id = $1,
+                 shipping_address = COALESCE($2, shipping_address),
+                 status = COALESCE(status, 'pending')
+             WHERE id = $3
+             RETURNING id, shipping_address, gang_sheet_data`,
+            [session.id, finalShippingAddressJson, preOrderId]
+          );
+          
+          if (result.rowCount === 0) {
+            console.error("Pre-order not found:", preOrderId);
+            // Fall through to create new order
+            result = null; // Signal to create new order
+          } else {
+            console.log("✓ Updated pre-order with Stripe session ID");
+            // Gang sheet data is already in the database from the pre-order
+          }
+        }
         
-        const query = hasGangSheetData
-          ? `INSERT INTO dtf_orders
-               (mode, size, quantity, transfer_name, garment_color, notes,
-                files, unit_price_cents, total_price_cents, stripe_session_id, status, shipping_address, gang_sheet_data)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, $12)
-             ON CONFLICT (stripe_session_id) 
-             DO UPDATE SET 
-               shipping_address = COALESCE(EXCLUDED.shipping_address, dtf_orders.shipping_address),
-               status = COALESCE(dtf_orders.status, EXCLUDED.status),
-               gang_sheet_data = COALESCE(EXCLUDED.gang_sheet_data, dtf_orders.gang_sheet_data)
-             RETURNING id, shipping_address, gang_sheet_data`
-          : `INSERT INTO dtf_orders
-               (mode, size, quantity, transfer_name, garment_color, notes,
-                files, unit_price_cents, total_price_cents, stripe_session_id, status, shipping_address)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11)
-             ON CONFLICT (stripe_session_id) 
-             DO UPDATE SET 
-               shipping_address = COALESCE(EXCLUDED.shipping_address, dtf_orders.shipping_address),
-               status = COALESCE(dtf_orders.status, EXCLUDED.status)
-             RETURNING id, shipping_address`;
-        
-        const params = hasGangSheetData
-          ? [
-              m.mode || "single-image",
-              size,
-              quantity,
-              transferName,
-              garmentColor,
-              notes,
-              JSON.stringify(files),
-              unitPriceCents,
-              totalPriceCents,
-              session.id,
-              finalShippingAddressJson,
-              gangSheetDataJson,
-            ]
-          : [
-              m.mode || "single-image",
-              size,
-              quantity,
-              transferName,
-              garmentColor,
-              notes,
-              JSON.stringify(files),
-              unitPriceCents,
-              totalPriceCents,
-              session.id,
-              finalShippingAddressJson,
-            ];
-        
-        const result = await client.query(query, params);
+        // Only create new order if we didn't successfully update a pre-order
+        if (!result || result.rowCount === 0) {
+          // Build the query - include gang_sheet_data if it exists (for non-pre-orders)
+          const hasGangSheetData = gangSheetData !== null;
+          const gangSheetDataJson = gangSheetData ? JSON.stringify(gangSheetData) : null;
+          
+          const query = hasGangSheetData
+            ? `INSERT INTO dtf_orders
+                 (mode, size, quantity, transfer_name, garment_color, notes,
+                  files, unit_price_cents, total_price_cents, stripe_session_id, status, shipping_address, gang_sheet_data)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, $12)
+               ON CONFLICT (stripe_session_id) 
+               DO UPDATE SET 
+                 shipping_address = COALESCE(EXCLUDED.shipping_address, dtf_orders.shipping_address),
+                 status = COALESCE(dtf_orders.status, EXCLUDED.status),
+                 gang_sheet_data = COALESCE(EXCLUDED.gang_sheet_data, dtf_orders.gang_sheet_data)
+               RETURNING id, shipping_address, gang_sheet_data`
+            : `INSERT INTO dtf_orders
+                 (mode, size, quantity, transfer_name, garment_color, notes,
+                  files, unit_price_cents, total_price_cents, stripe_session_id, status, shipping_address)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11)
+               ON CONFLICT (stripe_session_id) 
+               DO UPDATE SET 
+                 shipping_address = COALESCE(EXCLUDED.shipping_address, dtf_orders.shipping_address),
+                 status = COALESCE(dtf_orders.status, EXCLUDED.status)
+               RETURNING id, shipping_address`;
+          
+          const params = hasGangSheetData
+            ? [
+                mode,
+                size,
+                quantity,
+                transferName,
+                garmentColor,
+                notes,
+                JSON.stringify(files),
+                unitPriceCents,
+                totalPriceCents,
+                session.id,
+                finalShippingAddressJson,
+                gangSheetDataJson,
+              ]
+            : [
+                mode,
+                size,
+                quantity,
+                transferName,
+                garmentColor,
+                notes,
+                JSON.stringify(files),
+                unitPriceCents,
+                totalPriceCents,
+                session.id,
+                finalShippingAddressJson,
+              ];
+          
+          result = await client.query(query, params);
+        }
 
         if (result.rowCount) {
           const savedAddress = result.rows[0].shipping_address;
