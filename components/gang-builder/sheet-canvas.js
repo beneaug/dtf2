@@ -136,10 +136,10 @@ export function create(container) {
       const baseSheetWidthPx = convertInchesToPixels(sheetSize.widthIn);
       const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
       
-      // Calculate base scale ONCE - only if not stored or if container changed significantly
+      // Calculate base scale ONCE - use larger multiplier for bigger base size
       if (storedBaseScale === null) {
-        const fitScaleX = (containerW * 0.95) / baseSheetWidthPx;
-        const fitScaleY = (containerH * 0.95) / baseSheetHeightPx;
+        const fitScaleX = (containerW * 0.98) / baseSheetWidthPx; // Increased from 0.95 to 0.98
+        const fitScaleY = (containerH * 0.98) / baseSheetHeightPx;
         storedBaseScale = Math.min(fitScaleX, fitScaleY);
       }
       
@@ -149,10 +149,10 @@ export function create(container) {
       const sheetWidthPx = baseSheetWidthPx * scale;
       const sheetHeightPx = baseSheetHeightPx * scale;
       
-      // Canvas size: sheet + padding
+      // Canvas size: sheet + padding - NO WIDTH CAP
       const paddingPx = 32;
-      const canvasW = Math.max(containerW, sheetWidthPx + paddingPx * 2);
-      const canvasH = Math.max(containerH, sheetHeightPx + paddingPx * 2);
+      const canvasW = sheetWidthPx + paddingPx * 2; // No Math.max - let it be as wide as needed
+      const canvasH = sheetHeightPx + paddingPx * 2; // No Math.max - let it be as tall as needed
       
       // Set canvas size
       canvas.width = canvasW * dpr;
@@ -198,8 +198,8 @@ export function create(container) {
     if (storedBaseScale === null) {
       const containerW = containerWidth || 100;
       const containerH = containerHeight || 100;
-      const fitScaleX = (containerW * 0.95) / baseSheetWidthPx;
-      const fitScaleY = (containerH * 0.95) / baseSheetHeightPx;
+      const fitScaleX = (containerW * 0.98) / baseSheetWidthPx; // Match resizeCanvas
+      const fitScaleY = (containerH * 0.98) / baseSheetHeightPx;
       storedBaseScale = Math.min(fitScaleX, fitScaleY);
     }
     
@@ -210,10 +210,10 @@ export function create(container) {
     const sheetWidthPx = baseSheetWidthPx * scale;
     const sheetHeightPx = baseSheetHeightPx * scale;
     
-    // Position sheet - always at top, centered horizontally
-    const paddingPx = 16;
+    // Position sheet - START AT VERY TOP (0 or minimal), centered horizontally
+    const paddingPx = 8; // Minimal padding
     const offsetX = Math.max(paddingPx, (canvasWidth - sheetWidthPx) / 2);
-    const offsetY = paddingPx; // Always at top
+    const offsetY = 0; // START AT TOP - NO OFFSET
 
     // Draw grid (subtle)
     if (state.snapIncrement > 0) {
@@ -554,9 +554,20 @@ export function create(container) {
     // Resize canvas to accommodate new zoom level
     resizeCanvas();
     
+    // FORCE scroll to top when zooming
+    if (canvasWrapper) {
+      canvasWrapper.scrollTop = 0;
+      canvasWrapper.scrollLeft = 0;
+    }
+    
     // Reposition controls after resize (they should stay fixed)
     requestAnimationFrame(() => {
       positionZoomControls();
+      // Ensure scroll stays at top
+      if (canvasWrapper) {
+        canvasWrapper.scrollTop = 0;
+        canvasWrapper.scrollLeft = 0;
+      }
       isZooming = false;
     });
   }
@@ -607,6 +618,12 @@ export function create(container) {
       requestAnimationFrame(() => {
         resizeCanvas(); // This will get fresh wrapper dimensions and reset container to fixed size
         positionZoomControls();
+        // FORCE scroll to top immediately
+        if (canvasWrapper) {
+          canvasWrapper.scrollTop = 0;
+          canvasWrapper.scrollLeft = 0;
+        }
+        // Also force after render completes
         requestAnimationFrame(() => {
           if (canvasWrapper) {
             canvasWrapper.scrollTop = 0;
