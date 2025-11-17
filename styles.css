@@ -1658,18 +1658,18 @@ body {
 }
 
 .gang-zoom-controls {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
+  position: fixed;
+  top: auto;
+  right: auto;
   display: flex;
   align-items: center;
   gap: 0.5rem;
   background: rgba(0, 0, 0, 0.7);
   padding: 0.5rem;
   border-radius: 0.5rem;
-  z-index: 1000;
+  z-index: 1001;
   pointer-events: auto;
-  /* Fixed to top-right of wrapper, doesn't scroll with content */
+  /* Position will be set by JavaScript relative to center panel */
 }
 
 .gang-zoom-btn {

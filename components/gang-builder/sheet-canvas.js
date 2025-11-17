@@ -15,11 +15,11 @@ import { convertInchesToPixels, convertPixelsToInches, snapToGrid, isWithinBound
 export function create(container) {
   container.innerHTML = `
     <div class="gang-canvas-wrapper" id="gang-canvas-wrapper">
-      <div class="gang-zoom-controls">
-        <button class="gang-zoom-btn" id="gang-zoom-out" aria-label="Zoom out">−</button>
-        <span class="gang-zoom-level" id="gang-zoom-level">150%</span>
-        <button class="gang-zoom-btn" id="gang-zoom-in" aria-label="Zoom in">+</button>
-      </div>
+        <div class="gang-zoom-controls">
+          <button class="gang-zoom-btn" id="gang-zoom-out" aria-label="Zoom out">−</button>
+          <span class="gang-zoom-level" id="gang-zoom-level">75%</span>
+          <button class="gang-zoom-btn" id="gang-zoom-in" aria-label="Zoom in">+</button>
+        </div>
       <div class="gang-canvas-container" id="gang-canvas-container">
         <canvas id="gang-canvas"></canvas>
       </div>
@@ -33,13 +33,24 @@ export function create(container) {
   const zoomOutBtn = container.querySelector("#gang-zoom-out");
   const zoomInBtn = container.querySelector("#gang-zoom-in");
   const zoomLevelDisplay = container.querySelector("#gang-zoom-level");
+  const zoomControls = container.querySelector(".gang-zoom-controls");
+  
+  // Position zoom controls fixed relative to center panel
+  function positionZoomControls() {
+    const centerPanel = container.closest(".gang-builder-center");
+    if (centerPanel && zoomControls) {
+      const centerRect = centerPanel.getBoundingClientRect();
+      zoomControls.style.top = (centerRect.top + 16) + 'px';
+      zoomControls.style.right = (window.innerWidth - centerRect.right + 16) + 'px';
+    }
+  }
   
   // Track sheet size to detect changes and scroll to top
   const initialState = store.getState();
   let lastSheetSizeId = initialState.selectedSheetSizeId;
   
-  // Zoom state (1.0 = 100%, 1.5 = 150%, etc.)
-  let zoomLevel = 1.5; // Start at 150% for larger preview
+  // Zoom state (1.0 = 100%, 0.75 = 75%, etc.)
+  let zoomLevel = 0.75; // Start at 75% for default preview
 
   let isDragging = false;
   let dragStartX = 0;
@@ -503,10 +514,17 @@ export function create(container) {
 
   function setZoom(level) {
     // Clamp zoom between 0.25x (25%) and 4x (400%)
-    zoomLevel = Math.max(0.25, Math.min(4.0, level));
+    const newZoom = Math.max(0.25, Math.min(4.0, level));
+    if (newZoom === zoomLevel) return; // No change needed
+    
+    zoomLevel = newZoom;
     updateZoomDisplay();
-    // Resize canvas to accommodate new zoom level, then render
+    // Resize canvas to accommodate new zoom level
     resizeCanvas();
+    // Reposition controls after resize (they should stay fixed)
+    requestAnimationFrame(() => {
+      positionZoomControls();
+    });
   }
 
   zoomOutBtn.addEventListener("click", () => {
@@ -517,8 +535,12 @@ export function create(container) {
     setZoom(zoomLevel + 0.25);
   });
 
-  // Initialize zoom display
+  // Initialize zoom display and position controls
   updateZoomDisplay();
+  positionZoomControls();
+  
+  // Reposition controls on window resize
+  window.addEventListener("resize", positionZoomControls);
 
   // Subscribe to state changes
   store.subscribe((state) => {
@@ -535,17 +557,28 @@ export function create(container) {
     const sheetSizeChanged = lastSheetSizeId !== null && lastSheetSizeId !== state.selectedSheetSizeId;
     if (sheetSizeChanged) {
       lastSheetSizeId = state.selectedSheetSizeId;
-      // FORCE reset zoom to default when sheet size changes - this MUST happen
-      zoomLevel = 1.5;
+      // FORCE reset zoom to default (75%) when sheet size changes - this MUST happen
+      zoomLevel = 0.75;
       updateZoomDisplay();
-      // Force container dimension refresh
+      // Force container dimension refresh - get fresh measurements
       const rect = canvasContainer.getBoundingClientRect();
       if (rect.width > 0 && rect.height > 0) {
         containerWidth = rect.width;
         containerHeight = rect.height;
       }
-      // Resize canvas when sheet size changes - this will recalculate everything
-      resizeCanvas();
+      // Wait a frame to ensure DOM is updated, then resize
+      requestAnimationFrame(() => {
+        // Get fresh measurements again after DOM update
+        const freshRect = canvasContainer.getBoundingClientRect();
+        if (freshRect.width > 0 && freshRect.height > 0) {
+          containerWidth = freshRect.width;
+          containerHeight = freshRect.height;
+        }
+        // Resize canvas when sheet size changes - this will recalculate everything
+        resizeCanvas();
+        // Reposition controls after resize
+        positionZoomControls();
+      });
       // Scroll to top after resize completes
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -565,15 +598,20 @@ export function create(container) {
   // Initial render and resize handling
   // Use requestAnimationFrame to ensure container is laid out
   requestAnimationFrame(() => {
+    positionZoomControls();
     resizeCanvas();
   });
   
   // Also try after a short delay in case container sizing is delayed
   setTimeout(() => {
+    positionZoomControls();
     resizeCanvas();
   }, 100);
   
-  window.addEventListener("resize", resizeCanvas);
+  window.addEventListener("resize", () => {
+    positionZoomControls();
+    resizeCanvas();
+  });
   
   // Clean up image cache when component is destroyed (if needed)
   // For now, we'll keep the cache for the session
