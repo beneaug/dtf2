@@ -513,13 +513,14 @@ body {
   left: 0;
   top: calc(-100% - var(--sticker-p) - var(--sticker-p));
   clip-path: polygon(
-    var(--sticker-end) var(--sticker-start),
-    var(--sticker-end) var(--sticker-start),
-    var(--sticker-end) var(--sticker-start),
-    var(--sticker-end) var(--sticker-start)
+    100% 0%,
+    100% 0%,
+    100% 0%,
+    100% 0%
   );
   transform: scaleY(-1);
   transition: all var(--sticker-peel-hover-easing);
+  opacity: 0;
 }
 
 .dtf-transfer-container:hover .dtf-sheet-flap {
@@ -530,6 +531,7 @@ body {
     calc(var(--sticker-end) - var(--sticker-peelback-hover)) var(--sticker-start)
   );
   top: calc(-100% + 2 * var(--sticker-peelback-hover) - 1px);
+  opacity: 1;
   transition: all var(--sticker-peel-hover-easing);
 }
 
@@ -541,6 +543,7 @@ body {
     calc(var(--sticker-end) - var(--sticker-peelback-active)) var(--sticker-start)
   );
   top: calc(-100% + 2 * var(--sticker-peelback-active) - 1px);
+  opacity: 1;
   transition: all var(--sticker-peel-easing);
 }
 
