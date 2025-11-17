@@ -18,6 +18,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const totalSummaryEl = form.querySelector(".order-summary-total");
   const artSizeEl = form.querySelector(".order-summary-art-size");
   const bannerEl = document.getElementById("order-banner");
+  const previewMetrics = {
+    naturalWidth: 0,
+    naturalHeight: 0,
+  };
+  let previewLightNodes = null;
   // Success / cancel message based on querystring
   if (bannerEl) {
     const params = new URLSearchParams(window.location.search);
@@ -143,38 +148,277 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Artwork preview in the upload area
-  function applyPreviewSizing() {
-    if (!previewEl) return;
-    const img = previewEl.querySelector(".art-preview-image");
-    if (!img) return;
+  const PX_PER_INCH = 34;
+  const MAX_PREVIEW_SIDE = 420;
 
-    const label = (sizeSelect && sizeSelect.value) || '2" x 2"';
-    // Map size labels to a base pixel dimension so sizes feel 1:1 relative.
-    const baseSideMap = {
-      '2" x 2"': 80,
-      '4" x 4"': 140,
-      '6" x 6"': 200,
-      "Custom sheet": 220,
+  function parseSizeLabel(label) {
+    if (!label) return null;
+    const match = label.match(/(\d+(?:\.\d+)?)"\s*x\s*(\d+(?:\.\d+)?)/i);
+    if (!match) return null;
+    return {
+      width: parseFloat(match[1]),
+      height: parseFloat(match[2]),
     };
-    const baseSide = baseSideMap[label] || 120;
+  }
 
-    const naturalW = img.naturalWidth || baseSide;
-    const naturalH = img.naturalHeight || baseSide;
-    const maxSide = Math.max(naturalW, naturalH);
-    const scale = baseSide / maxSide;
+  function getPreviewElements() {
+    if (!previewEl) return { stage: null, artImg: null };
+    return {
+      stage: previewEl.querySelector(".dtf-preview-stage"),
+      artImg: previewEl.querySelector(".dtf-art-image"),
+    };
+  }
 
-    const imgWidth = naturalW * scale;
-    const imgHeight = naturalH * scale;
+  function ensurePreviewFilters() {
+    if (previewLightNodes) return previewLightNodes;
+    const filtersRoot = document.getElementById("dtf-preview-filters");
+    if (!filtersRoot) return null;
+    const pointLight = filtersRoot.querySelector("#dtfPointLightNode");
+    const flippedLight = filtersRoot.querySelector("#dtfPointLightFlippedNode");
+    if (!pointLight || !flippedLight) return null;
+    previewLightNodes = { pointLight, flippedLight };
+    return previewLightNodes;
+  }
 
-    img.style.width = `${imgWidth}px`;
-    img.style.height = `${imgHeight}px`;
+  function setPreviewLightPosition(stage, clientX, clientY) {
+    const lights = ensurePreviewFilters();
+    if (!lights || !stage) return;
+    const rect = stage.getBoundingClientRect();
+    const boundedX = Math.max(rect.left, Math.min(rect.right, clientX));
+    const boundedY = Math.max(rect.top, Math.min(rect.bottom, clientY));
+    const relativeX = boundedX - rect.left;
+    const relativeY = boundedY - rect.top;
+    lights.pointLight.setAttribute("x", relativeX.toFixed(2));
+    lights.pointLight.setAttribute("y", relativeY.toFixed(2));
+    lights.flippedLight.setAttribute("x", relativeX.toFixed(2));
+    lights.flippedLight.setAttribute(
+      "y",
+      Math.max(0, rect.height - relativeY).toFixed(2)
+    );
+  }
 
-    // Also size the sticker elements
-    const stickerRoot = previewEl.querySelector(".art-preview-sticker-root");
-    if (stickerRoot) {
-      stickerRoot.style.width = `${imgWidth}px`;
-      stickerRoot.style.height = `${imgHeight}px`;
+  function resetPreviewLight(stage) {
+    if (!stage) return;
+    const rect = stage.getBoundingClientRect();
+    setPreviewLightPosition(
+      stage,
+      rect.left + rect.width * 0.6,
+      rect.top + rect.height * 0.25
+    );
+  }
+
+  function bindPreviewInteractions(previewRoot) {
+    const stage = previewRoot && previewRoot.querySelector(".dtf-preview-stage");
+    if (!stage) return;
+
+    const handlePointerMove = (event) => {
+      setPreviewLightPosition(stage, event.clientX, event.clientY);
+    };
+
+    stage.addEventListener("pointerenter", (event) => {
+      stage.classList.add("is-hovered");
+      handlePointerMove(event);
+    });
+
+    stage.addEventListener("pointermove", handlePointerMove);
+
+    stage.addEventListener("pointerleave", () => {
+      stage.classList.remove("is-hovered", "is-active");
+      resetPreviewLight(stage);
+    });
+
+    stage.addEventListener("pointerdown", (event) => {
+      stage.classList.add("is-active");
+      if (stage.setPointerCapture) {
+        stage.setPointerCapture(event.pointerId);
+      }
+    });
+
+    stage.addEventListener("pointerup", () => {
+      stage.classList.remove("is-active");
+    });
+
+    stage.addEventListener("lostpointercapture", () => {
+      stage.classList.remove("is-active");
+    });
+
+    resetPreviewLight(stage);
+  }
+
+  function createPreviewMarkup() {
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = `
+      <div class="dtf-preview">
+        <div class="dtf-preview-stage" data-natural-width="0" data-natural-height="0">
+          <div class="dtf-art">
+            <div class="dtf-art-lighting">
+              <img class="dtf-art-image" alt="" draggable="false" />
+            </div>
+          </div>
+          <div class="dtf-transfer" aria-hidden="true">
+            <div class="dtf-transfer-sheet"></div>
+            <div class="dtf-transfer-peel"></div>
+          </div>
+        </div>
+      </div>
+    `;
+    return wrapper.firstElementChild;
+  }
+
+  function isLikelyImage(file) {
+    if (!file) return false;
+    if (file.type && file.type.startsWith("image/")) return true;
+    return /\.(png|jpe?g|gif|bmp|svg|webp|tiff?)$/i.test(file.name || "");
+  }
+
+  function updateArtSizeSummary() {
+    if (!artSizeEl) return;
+    if (!sizeSelect || !sizeSelect.value) {
+      artSizeEl.textContent = "–";
+      return;
     }
+    const dimensions = parseSizeLabel(sizeSelect.value);
+    if (!dimensions) {
+      artSizeEl.textContent = sizeSelect.value;
+      return;
+    }
+
+    const naturalW = previewMetrics.naturalWidth;
+    const naturalH = previewMetrics.naturalHeight;
+    if (!naturalW || !naturalH) {
+      artSizeEl.textContent = `${dimensions.width.toFixed(
+        2
+      )}" × ${dimensions.height.toFixed(2)}"`;
+      return;
+    }
+
+    const naturalAspect = naturalW / naturalH;
+    const boxAspect = dimensions.width / dimensions.height;
+    let artWidthInches;
+    let artHeightInches;
+
+    if (naturalAspect >= boxAspect) {
+      artWidthInches = dimensions.width;
+      artHeightInches = dimensions.width / naturalAspect;
+    } else {
+      artHeightInches = dimensions.height;
+      artWidthInches = dimensions.height * naturalAspect;
+    }
+
+    artSizeEl.textContent = `${artWidthInches.toFixed(
+      2
+    )}" × ${artHeightInches.toFixed(2)}"`;
+  }
+
+  function applyPreviewSizing() {
+    const { stage, artImg } = getPreviewElements();
+    if (!stage || !artImg) return;
+
+    const naturalW =
+      Number(stage.dataset.naturalWidth) ||
+      previewMetrics.naturalWidth ||
+      artImg.naturalWidth ||
+      1;
+    const naturalH =
+      Number(stage.dataset.naturalHeight) ||
+      previewMetrics.naturalHeight ||
+      artImg.naturalHeight ||
+      1;
+
+    const parsedSize = parseSizeLabel(sizeSelect && sizeSelect.value);
+    let boxWidthPx = 180;
+    let boxHeightPx = 180;
+
+    if (parsedSize) {
+      const widthPxRaw = parsedSize.width * PX_PER_INCH;
+      const heightPxRaw = parsedSize.height * PX_PER_INCH;
+      const longest = Math.max(widthPxRaw, heightPxRaw, 1);
+      const scaleDown = Math.min(1, MAX_PREVIEW_SIDE / longest);
+      boxWidthPx = widthPxRaw * scaleDown;
+      boxHeightPx = heightPxRaw * scaleDown;
+    } else {
+      const maxSide = Math.max(naturalW, naturalH, 1);
+      const base = 200;
+      const scale = base / maxSide;
+      boxWidthPx = naturalW * scale;
+      boxHeightPx = naturalH * scale;
+    }
+
+    const naturalAspect = naturalW / naturalH || 1;
+    const boxAspect = boxWidthPx / boxHeightPx || 1;
+    let finalWidth = boxWidthPx;
+    let finalHeight = boxHeightPx;
+
+    if (naturalAspect >= boxAspect) {
+      finalHeight = finalWidth / naturalAspect;
+    } else {
+      finalWidth = finalHeight * naturalAspect;
+    }
+
+    artImg.style.width = `${finalWidth}px`;
+    artImg.style.height = `${finalHeight}px`;
+
+    stage.style.setProperty("--dtf-art-width", `${finalWidth}px`);
+    stage.style.setProperty("--dtf-art-height", `${finalHeight}px`);
+
+    const computed = getComputedStyle(stage);
+    const transferPad =
+      parseFloat(computed.getPropertyValue("--dtf-transfer-pad")) || 22;
+    const transferWidth = finalWidth + transferPad * 2;
+    const transferHeight = finalHeight + transferPad * 2;
+    stage.style.setProperty("--dtf-transfer-width", `${transferWidth}px`);
+    stage.style.setProperty("--dtf-transfer-height", `${transferHeight}px`);
+    const peelMax = Math.min(transferWidth, transferHeight) * 0.65;
+    stage.style.setProperty("--dtf-peel-max", `${peelMax}px`);
+  }
+
+  function renderImagePreview(file) {
+    if (!previewEl) return;
+    const previewNode = createPreviewMarkup();
+    const stage = previewNode.querySelector(".dtf-preview-stage");
+    const artImg = previewNode.querySelector(".dtf-art-image");
+    if (!stage || !artImg) return;
+
+    const objectUrl = URL.createObjectURL(file);
+    artImg.alt = file.name || "Uploaded artwork";
+    artImg.src = objectUrl;
+    artImg.addEventListener("contextmenu", (event) => event.preventDefault());
+
+    artImg.onload = () => {
+      if (!previewNode.isConnected) {
+        URL.revokeObjectURL(objectUrl);
+        return;
+      }
+      previewMetrics.naturalWidth = artImg.naturalWidth || 1;
+      previewMetrics.naturalHeight = artImg.naturalHeight || 1;
+      stage.dataset.naturalWidth = String(previewMetrics.naturalWidth);
+      stage.dataset.naturalHeight = String(previewMetrics.naturalHeight);
+      applyPreviewSizing();
+      updateArtSizeSummary();
+      bindPreviewInteractions(previewNode);
+      URL.revokeObjectURL(objectUrl);
+    };
+
+    artImg.onerror = () => {
+      if (!previewNode.isConnected) {
+        URL.revokeObjectURL(objectUrl);
+        return;
+      }
+      URL.revokeObjectURL(objectUrl);
+      previewMetrics.naturalWidth = 0;
+      previewMetrics.naturalHeight = 0;
+      previewEl.classList.remove("order-upload-preview--visible");
+      previewEl.innerHTML = "";
+      const errorFallback = document.createElement("div");
+      errorFallback.className = "order-upload-preview-fallback";
+      errorFallback.textContent =
+        "We couldn't preview this file. Please try another image.";
+      previewEl.appendChild(errorFallback);
+      updateArtSizeSummary();
+    };
+
+    previewEl.appendChild(previewNode);
+    previewEl.classList.add("order-upload-preview--visible");
   }
 
   if (uploadInput && previewEl) {
@@ -183,177 +427,40 @@ document.addEventListener("DOMContentLoaded", () => {
       previewEl.innerHTML = "";
       previewEl.classList.remove("order-upload-preview--visible");
 
-      if (!file) return;
+      if (!file) {
+        previewMetrics.naturalWidth = 0;
+        previewMetrics.naturalHeight = 0;
+        updateArtSizeSummary();
+        return;
+      }
 
-      if (file.type && file.type.startsWith("image/")) {
-        const objectURL = URL.createObjectURL(file);
-
-        // Create the new sticker structure
-        const stickerRoot = document.createElement("div");
-        stickerRoot.className = "art-preview-sticker-root";
-
-        const artworkImage = document.createElement("img");
-        artworkImage.className = "art-preview-image";
-        artworkImage.alt = file.name;
-        artworkImage.src = objectURL;
-
-        stickerRoot.innerHTML = `
-          <div class="draggable">
-            <div class="sticker-container">
-              <div class="sticker-main">
-                <div class="sticker-lighting">
-                  <div class="transfer-layer sticker-image"></div>
-                </div>
-              </div>
-              <div class="shadow">
-                <div class="flap">
-                  <div class="transfer-layer shadow-image"></div>
-                </div>
-              </div>
-              <div class="flap">
-                <div class="flap-lighting">
-                  <div class="transfer-layer flap-image"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        `;
-        stickerRoot.insertBefore(artworkImage, stickerRoot.firstChild);
-        previewEl.appendChild(stickerRoot);
-
-        artworkImage.onload = () => {
-          applyPreviewSizing();
-          // Actual artwork size calculation
-          if (artSizeEl && sizeSelect) {
-            const label = sizeSelect.value;
-            const match =
-              label && label.match(/(\d+(?:\.\d+)?)"\s*x\s*(\d+(?:\.\d+)?)/);
-            if (match) {
-              const boxW = parseFloat(match[1]);
-              const boxH = parseFloat(match[2]);
-              const naturalW = artworkImage.naturalWidth || 1;
-              const naturalH = artworkImage.naturalHeight || 1;
-              const aspect = naturalW / naturalH;
-              const boxAspect = boxW / boxH;
-
-              let artW, artH;
-              if (aspect >= boxAspect) {
-                artW = boxW;
-                artH = boxW / aspect;
-              } else {
-                artH = boxH;
-                artW = boxH * aspect;
-              }
-              artSizeEl.textContent = `${artW.toFixed(2)}" × ${artH.toFixed(
-                2
-              )}"`;
-            } else {
-              artSizeEl.textContent = label;
-            }
-          }
-          // Release memory once the image is loaded
-          URL.revokeObjectURL(artworkImage.src);
-        };
+      if (isLikelyImage(file)) {
+        renderImagePreview(file);
       } else {
         const fallback = document.createElement("div");
         fallback.className = "order-upload-preview-fallback";
         fallback.textContent = file.name;
         previewEl.appendChild(fallback);
+        previewEl.classList.add("order-upload-preview--visible");
+        previewMetrics.naturalWidth = 0;
+        previewMetrics.naturalHeight = 0;
+        updateArtSizeSummary();
       }
-
-      previewEl.classList.add("order-upload-preview--visible");
-    });
-
-    if (sizeSelect) {
-      sizeSelect.addEventListener("change", () => {
-        applyPreviewSizing();
-        updatePricingDisplay();
-      });
-    }
-  }
-
-  // --- Sticker peel effect ---
-  function initializeStickerEffect() {
-    // This needs to be re-run if a new image is uploaded.
-    const pointLight = document.querySelector("fePointLight");
-    const pointLightFlipped = document.getElementById("fePointLightFlipped");
-    const stickerContainer = document.querySelector(".sticker-container");
-    const draggable = document.querySelector(".draggable");
-
-    if (!pointLight || !pointLightFlipped || !stickerContainer || !draggable) {
-      return;
-    }
-
-    let isDragging = false;
-    let dragOffsetX = 0;
-    let dragOffsetY = 0;
-
-    function getContainingBlockOffset(element) {
-      let containingBlock = element.offsetParent || document.documentElement;
-      const containingBlockRect = containingBlock.getBoundingClientRect();
-      return {
-        left: containingBlockRect.left,
-        top: containingBlockRect.top,
-      };
-    }
-
-    function updateLightPosition(mouseX, mouseY) {
-      const rect = stickerContainer.getBoundingClientRect();
-      const relativeX = mouseX - rect.left;
-      const relativeY = mouseY - rect.top;
-      pointLight.setAttribute("x", relativeX);
-      pointLight.setAttribute("y", relativeY);
-      pointLightFlipped.setAttribute("x", relativeX);
-      pointLightFlipped.setAttribute("y", rect.height - relativeY);
-    }
-
-    function startDrag(e) {
-      isDragging = true;
-      const rect = draggable.getBoundingClientRect();
-      const containingBlockOffset = getContainingBlockOffset(draggable);
-      dragOffsetX = e.clientX - rect.left;
-      dragOffsetY = e.clientY - rect.top;
-      draggable.style.left = rect.left - containingBlockOffset.left + "px";
-      draggable.style.top = rect.top - containingBlockOffset.top + "px";
-    }
-
-    function updateDragPosition(e) {
-      if (isDragging) {
-        const containingBlockOffset = getContainingBlockOffset(draggable);
-        draggable.style.left =
-          e.clientX - dragOffsetX - containingBlockOffset.left + "px";
-        draggable.style.top =
-          e.clientY - dragOffsetY - containingBlockOffset.top + "px";
-      }
-    }
-
-    function stopDrag() {
-      isDragging = false;
-    }
-
-    draggable.addEventListener("mousedown", startDrag);
-    document.addEventListener("mouseup", stopDrag);
-    document.addEventListener("mousemove", (e) => {
-      updateLightPosition(e.clientX, e.clientY);
-      updateDragPosition(e);
     });
   }
-
-  if (uploadInput) {
-    uploadInput.addEventListener("change", () => {
-      // Defer to allow the DOM to update
-      setTimeout(initializeStickerEffect, 100);
-    });
-  }
-  // --- End sticker peel effect ---
 
   if (sizeSelect) {
-    sizeSelect.addEventListener("change", updatePricingDisplay);
+    sizeSelect.addEventListener("change", () => {
+      updatePricingDisplay();
+      applyPreviewSizing();
+      updateArtSizeSummary();
+    });
   }
   if (qtyInput) {
     qtyInput.addEventListener("input", updatePricingDisplay);
   }
   updatePricingDisplay();
+  updateArtSizeSummary();
 
   // Mode tabs – just cosmetic for now, but we record the choice.
   let currentMode = "single-image";

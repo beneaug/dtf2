@@ -42,58 +42,51 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body class="order-body">
-    <svg height="0" width="0" style="position: absolute; top: -100px; left: -100px;">
+    <svg
+      id="dtf-preview-filters"
+      width="0"
+      height="0"
+      aria-hidden="true"
+      focusable="false"
+    >
       <defs>
-        <filter id="pointLight">
+        <filter id="dtfPointLight">
           <feGaussianBlur stdDeviation="1" result="blur" />
           <feSpecularLighting
             result="spec"
             in="blur"
             specularExponent="100"
             specularConstant="0.1"
-            lightingColor="white"
+            lighting-color="white"
           >
-            <fePointLight x="100" y="100" z="300" />
+            <fePointLight x="100" y="100" z="300" id="dtfPointLightNode" />
           </feSpecularLighting>
-          <feComposite
-            in="spec"
-            in2="SourceGraphic"
-            operator="screen"
-            result="lit"
-          />
+          <feComposite in="spec" in2="SourceGraphic" operator="screen" result="lit" />
           <feComposite in="lit" in2="SourceAlpha" operator="in" />
         </filter>
-        <filter id="pointLightFlipped">
+
+        <filter id="dtfPointLightFlipped">
           <feGaussianBlur stdDeviation="10" result="blur" />
           <feSpecularLighting
             result="spec"
             in="blur"
             specularExponent="100"
             specularConstant="0.7"
-            lightingColor="white"
+            lighting-color="white"
           >
-            <fePointLight x="100" y="100" z="300" id="fePointLightFlipped" />
+            <fePointLight x="100" y="100" z="300" id="dtfPointLightFlippedNode" />
           </feSpecularLighting>
-          <feComposite
-            in="spec"
-            in2="SourceGraphic"
-            operator="screen"
-            result="lit"
-          />
+          <feComposite in="spec" in2="SourceGraphic" operator="screen" result="lit" />
           <feComposite in="lit" in2="SourceAlpha" operator="in" />
         </filter>
-        <filter id="dropShadow">
-          <feDropShadow
-            dx="2"
-            dy="4"
-            stdDeviation="3"
-            flood-color="black"
-            flood-opacity="0.6"
-          />
+
+        <filter id="dtfDropShadow">
+          <feDropShadow dx="2" dy="4" stdDeviation="3" flood-color="black" flood-opacity="0.45" />
         </filter>
-        <filter id="expandAndFill">
+
+        <filter id="dtfTransferFill">
           <feOffset dx="0" dy="0" in="SourceAlpha" result="shape" />
-          <feFlood flood-color="rgb(179, 179, 179)" result="flood" />
+          <feFlood flood-color="rgb(210, 213, 219)" result="flood" />
           <feComposite operator="in" in="flood" in2="shape" />
         </filter>
       </defs>
