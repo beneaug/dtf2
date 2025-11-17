@@ -56,23 +56,56 @@ export function create(container) {
     });
   }
 
+  // Store container dimensions for scale calculations
+  let containerWidth = 0;
+  let containerHeight = 0;
+  
   // Resize canvas to fit container with high DPI support
   function resizeCanvas() {
     const rect = canvasContainer.getBoundingClientRect();
     // Ensure we have valid dimensions
     if (rect.width > 0 && rect.height > 0) {
+      // Store container dimensions
+      containerWidth = rect.width;
+      containerHeight = rect.height;
+      
       // Use device pixel ratio for high DPI displays
       const dpr = window.devicePixelRatio || 1;
       
-      // Set actual canvas size in memory (scaled by DPR)
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
+      // Calculate needed canvas size based on sheet size
+      const state = store.getState();
+      const sheetSize = getSheetSize(state.selectedSheetSizeId);
+      if (sheetSize) {
+        const baseSheetWidthPx = convertInchesToPixels(sheetSize.widthIn);
+        const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
+        
+        // Calculate scale to fit in container (with some padding)
+        const fitScaleX = (containerWidth * 0.95) / baseSheetWidthPx;
+        const fitScaleY = (containerHeight * 0.95) / baseSheetHeightPx;
+        const fitScale = Math.min(fitScaleX, fitScaleY);
+        
+        const sheetWidthPx = baseSheetWidthPx * fitScale;
+        const sheetHeightPx = baseSheetHeightPx * fitScale;
+        
+        const paddingPx = 32;
+        const neededWidth = Math.max(containerWidth, sheetWidthPx + paddingPx * 2);
+        const neededHeight = Math.max(containerHeight, sheetHeightPx + paddingPx * 2);
+        
+        // Set canvas size
+        canvas.width = neededWidth * dpr;
+        canvas.height = neededHeight * dpr;
+        canvas.style.width = neededWidth + 'px';
+        canvas.style.height = neededHeight + 'px';
+      } else {
+        // No sheet size selected, use container size
+        canvas.width = containerWidth * dpr;
+        canvas.height = containerHeight * dpr;
+        canvas.style.width = containerWidth + 'px';
+        canvas.style.height = containerHeight + 'px';
+      }
       
-      // Set display size (CSS pixels)
-      canvas.style.width = rect.width + 'px';
-      canvas.style.height = rect.height + 'px';
-      
-      // Scale the context to match DPR
+      // Reset transform and scale the context to match DPR
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.scale(dpr, dpr);
       
       render();
@@ -90,8 +123,8 @@ export function create(container) {
 
     // Get canvas display size (CSS pixels, not scaled by DPR)
     const dpr = window.devicePixelRatio || 1;
-    const displayWidth = canvas.width / dpr;
-    const displayHeight = canvas.height / dpr;
+    const canvasWidth = canvas.width / dpr;
+    const canvasHeight = canvas.height / dpr;
 
     // Clear canvas (use actual canvas dimensions)
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -100,47 +133,22 @@ export function create(container) {
     const baseSheetWidthPx = convertInchesToPixels(sheetSize.widthIn);
     const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
     
-    // Use a fixed minimum target size for the sheet (ensures large preview)
-    // This makes the sheet always render at a large size, may overflow canvas
-    const MIN_SHEET_WIDTH = 650; // Minimum width in pixels for large preview
-    const MIN_SHEET_HEIGHT = 400; // Minimum height in pixels
+    // Calculate scale to fit in container (use container dimensions, not canvas)
+    // This ensures consistent scaling regardless of canvas size
+    const containerW = containerWidth || canvasWidth;
+    const containerH = containerHeight || canvasHeight;
     
-    // Calculate scale to reach minimum size
-    const scaleForMinWidth = MIN_SHEET_WIDTH / baseSheetWidthPx;
-    const scaleForMinHeight = MIN_SHEET_HEIGHT / baseSheetHeightPx;
-    
-    // Use the larger scale to ensure we hit minimum size
-    let scale = Math.max(scaleForMinWidth, scaleForMinHeight);
-    
-    // But also check if we can fit in canvas - if so, use that for better fit
-    const fitScaleX = (displayWidth * 0.98) / baseSheetWidthPx;
-    const fitScaleY = (displayHeight * 0.98) / baseSheetHeightPx;
-    const fitScale = Math.min(fitScaleX, fitScaleY);
-    
-    // Use whichever is larger - ensures minimum size OR fits canvas if canvas is huge
-    scale = Math.max(scale, fitScale);
+    const fitScaleX = (containerW * 0.95) / baseSheetWidthPx;
+    const fitScaleY = (containerH * 0.95) / baseSheetHeightPx;
+    const scale = Math.min(fitScaleX, fitScaleY);
 
     const sheetWidthPx = baseSheetWidthPx * scale;
     const sheetHeightPx = baseSheetHeightPx * scale;
     
     // Position sheet - center horizontally, top-aligned vertically for scrolling
     const paddingPx = 32; // 2rem = 32px
-    const offsetX = Math.max(paddingPx, (displayWidth - sheetWidthPx) / 2);
+    const offsetX = Math.max(paddingPx, (canvasWidth - sheetWidthPx) / 2);
     const offsetY = paddingPx; // Always start at top for scrolling
-    
-    // Resize canvas to fit the sheet if it's larger than display
-    // Ensure canvas is large enough to show the full sheet with padding
-    const neededCanvasWidth = Math.max(displayWidth, sheetWidthPx + offsetX + paddingPx);
-    const neededCanvasHeight = Math.max(displayHeight, sheetHeightPx + offsetY + paddingPx);
-    
-    // Update canvas size if needed (but keep DPR scaling)
-    if (canvas.width / dpr !== neededCanvasWidth || canvas.height / dpr !== neededCanvasHeight) {
-      canvas.width = neededCanvasWidth * dpr;
-      canvas.height = neededCanvasHeight * dpr;
-      canvas.style.width = neededCanvasWidth + 'px';
-      canvas.style.height = neededCanvasHeight + 'px';
-      ctx.scale(dpr, dpr);
-    }
 
     // Draw grid (subtle)
     if (state.snapIncrement > 0) {
@@ -470,15 +478,13 @@ export function create(container) {
       }
     });
     
-    // If sheet size changed, scroll to top after render
+    // If sheet size changed, resize canvas and scroll to top
     const sheetSizeChanged = lastSheetSizeId !== null && lastSheetSizeId !== state.selectedSheetSizeId;
-    lastSheetSizeId = state.selectedSheetSizeId;
-    
-    render();
-    
-    // Scroll to top after render completes
     if (sheetSizeChanged) {
-      // Use double requestAnimationFrame to ensure render is complete
+      lastSheetSizeId = state.selectedSheetSizeId;
+      // Resize canvas when sheet size changes
+      resizeCanvas();
+      // Scroll to top after resize completes
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           if (canvasWrapper) {
@@ -487,6 +493,10 @@ export function create(container) {
           }
         });
       });
+    } else {
+      // Just render, don't resize
+      lastSheetSizeId = state.selectedSheetSizeId;
+      render();
     }
   });
 
