@@ -142,32 +142,93 @@ document.addEventListener("DOMContentLoaded", () => {
     if (totalSummaryEl) totalSummaryEl.textContent = formatPrice(total);
   }
 
+  /**
+   * Setup the peel preview effect for a given preview container.
+   * When an image has been uploaded, order.js injects markup
+   * containing .transfer-stage, .plastic-cover, .plastic-flap and
+   * .transfer-artwork into the preview element.  This function
+   * attaches scroll and mousemove listeners to animate the peel,
+   * revealing the artwork as you scroll down the page and moving
+   * the specular highlight with the cursor.  It is safe to call
+   * multiple times; each call will bind new listeners scoped to
+   * this particular preview instance.
+   */
+  function setupPeelEffect(preview) {
+    const stage = preview && preview.querySelector(".transfer-stage");
+    if (!stage) return;
+    const cover = stage.querySelector(".plastic-cover");
+    const flap = stage.querySelector(".plastic-flap");
+    // Light sources are defined in order.html's <defs> block.
+    const pointLight = document.querySelector(
+      "filter#pointLight fePointLight"
+    );
+    const pointLightFlipped = document.getElementById(
+      "fePointLightFlipped"
+    );
+
+    function setPeel(progress) {
+      // clamp to [0,1]
+      const p = Math.max(0, Math.min(1, progress));
+      const coverBottom = 100 - p * 100;
+      const flapBottom = p * 100;
+      if (cover) {
+        cover.style.clipPath = `polygon(0 0, 100% 0, 100% ${coverBottom}%, 0 ${coverBottom}%)`;
+      }
+      if (flap) {
+        flap.style.clipPath = `polygon(0 0, 100% 0, 100% ${flapBottom}%, 0 ${flapBottom}%)`;
+        const liftPx = p * 70;
+        const tiltDeg = p * 70;
+        flap.style.transform = `translate(-50%, calc(-50% - ${liftPx}px)) rotateX(${tiltDeg}deg)`;
+      }
+    }
+
+    function updatePeelOnScroll() {
+      const rect = stage.getBoundingClientRect();
+      const winH = window.innerHeight || document.documentElement.clientHeight;
+      const start = winH * 0.2;
+      const end = winH * 0.8;
+      const mid = rect.top + rect.height / 2;
+      const raw = (mid - start) / (end - start);
+      setPeel(raw);
+    }
+
+    // Attach listeners
+    window.addEventListener("scroll", updatePeelOnScroll);
+    window.addEventListener("resize", updatePeelOnScroll);
+    // Initialize position
+    updatePeelOnScroll();
+
+    // Move the highlight with the cursor
+    stage.addEventListener("mousemove", (e) => {
+      const rect = stage.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      if (pointLight) {
+        pointLight.setAttribute("x", x);
+        pointLight.setAttribute("y", y);
+      }
+      if (pointLightFlipped) {
+        pointLightFlipped.setAttribute("x", x);
+        pointLightFlipped.setAttribute("y", rect.height - y);
+      }
+    });
+  }
+
   // Artwork preview in the upload area
   function applyPreviewSizing() {
     if (!previewEl) return;
-    const img = previewEl.querySelector("img");
+    // Prefer the peel preview's artwork if present, otherwise fall back to any img
+    const img =
+      previewEl.querySelector(".transfer-artwork") ||
+      previewEl.querySelector("img");
     if (!img) return;
 
     const label = (sizeSelect && sizeSelect.value) || '2" x 2"';
     // Map size labels to a base pixel dimension so sizes feel 1:1 relative.
     const baseSideMap = {
       '2" x 2"': 80,
-      '4" x 2"': 80,
-      '3" x 3"': 100,
-      '5" x 3"': 120,
       '4" x 4"': 140,
-      '5" x 5"': 160,
       '6" x 6"': 200,
-      '7" x 7"': 220,
-      '11" x 5"': 240,
-      '8" x 8"': 240,
-      '9" x 9"': 260,
-      '9" x 11"': 280,
-      '10" x 10"': 280,
-      '11" x 11"': 300,
-      '11" x 14"': 320,
-      '12" x 17"': 340,
-      '12" x 22"': 360,
       "Custom sheet": 220,
     };
     const baseSide = baseSideMap[label] || 120;
@@ -184,21 +245,32 @@ document.addEventListener("DOMContentLoaded", () => {
   if (uploadInput && previewEl) {
     uploadInput.addEventListener("change", () => {
       const file = uploadInput.files && uploadInput.files[0];
+      // Clear any existing preview content
       previewEl.innerHTML = "";
       previewEl.classList.remove("order-upload-preview--visible");
 
       if (!file) return;
 
       if (file.type && file.type.startsWith("image/")) {
-        const img = document.createElement("img");
-        img.alt = file.name;
-        img.src = URL.createObjectURL(file);
-        img.draggable = false;
-        img.oncontextmenu = () => false;
-        
-        img.onload = () => {
+        // Build peel preview markup
+        const wrapper = document.createElement("div");
+        wrapper.className = "transfer-demo";
+        wrapper.innerHTML = `
+          <div class="transfer-stage">
+            <img class="transfer-artwork" alt="${file.name}" />
+            <div class="plastic-cover">
+              <div class="plastic-sheen"></div>
+            </div>
+            <div class="plastic-flap">
+              <div class="plastic-sheen"></div>
+            </div>
+          </div>
+        `;
+        const artImg = wrapper.querySelector(".transfer-artwork");
+        artImg.src = URL.createObjectURL(file);
+        artImg.onload = () => {
           applyPreviewSizing();
-          // Actual artwork size calculation
+          // compute and display artwork size
           if (artSizeEl && sizeSelect) {
             const label = sizeSelect.value;
             const match =
@@ -206,11 +278,10 @@ document.addEventListener("DOMContentLoaded", () => {
             if (match) {
               const boxW = parseFloat(match[1]);
               const boxH = parseFloat(match[2]);
-              const naturalW = img.naturalWidth || 1;
-              const naturalH = img.naturalHeight || 1;
+              const naturalW = artImg.naturalWidth || 1;
+              const naturalH = artImg.naturalHeight || 1;
               const aspect = naturalW / naturalH;
               const boxAspect = boxW / boxH;
-
               let artW, artH;
               if (aspect >= boxAspect) {
                 artW = boxW;
@@ -226,65 +297,20 @@ document.addEventListener("DOMContentLoaded", () => {
               artSizeEl.textContent = label;
             }
           }
-          // Release memory once the image is loaded
-          URL.revokeObjectURL(img.src);
+          // Clean up object URL
+          URL.revokeObjectURL(artImg.src);
         };
-        
-        // Create DTF transfer structure
-        const container = document.createElement("div");
-        container.className = "dtf-transfer-container";
-        
-        const artworkBase = document.createElement("div");
-        artworkBase.className = "dtf-artwork-base";
-        
-        const artworkLighting = document.createElement("div");
-        artworkLighting.className = "dtf-artwork-lighting";
-        artworkLighting.appendChild(img);
-        
-        artworkBase.appendChild(artworkLighting);
-        container.appendChild(artworkBase);
-        
-        // Transfer sheet overlay
-        const transferSheet = document.createElement("div");
-        transferSheet.className = "dtf-transfer-sheet";
-        
-        // Main sheet layer (covers the image, clips as corner peels)
-        const sheetMain = document.createElement("div");
-        sheetMain.className = "dtf-sheet-main";
-        const sheetMainInner = document.createElement("div");
-        sheetMainInner.className = "dtf-sheet-main-inner";
-        sheetMain.appendChild(sheetMainInner);
-        transferSheet.appendChild(sheetMain);
-        
-        // Shadow layer
-        const shadow = document.createElement("div");
-        shadow.className = "dtf-sheet-shadow";
-        const shadowInner = document.createElement("div");
-        shadowInner.className = "dtf-flap-inner";
-        shadow.appendChild(shadowInner);
-        transferSheet.appendChild(shadow);
-        
-        // Flap layer (the curling corner)
-        const sheetFlap = document.createElement("div");
-        sheetFlap.className = "dtf-sheet-flap";
-        const flapLighting = document.createElement("div");
-        flapLighting.className = "dtf-flap-lighting";
-        const flapInner = document.createElement("div");
-        flapInner.className = "dtf-flap-inner";
-        flapLighting.appendChild(flapInner);
-        sheetFlap.appendChild(flapLighting);
-        transferSheet.appendChild(sheetFlap);
-        
-        artworkBase.appendChild(transferSheet);
-        previewEl.appendChild(container);
+        previewEl.appendChild(wrapper);
+        previewEl.classList.add("order-upload-preview--visible");
+        // initialize peel effect for this preview
+        setupPeelEffect(previewEl);
       } else {
         const fallback = document.createElement("div");
         fallback.className = "order-upload-preview-fallback";
         fallback.textContent = file.name;
         previewEl.appendChild(fallback);
+        previewEl.classList.add("order-upload-preview--visible");
       }
-
-      previewEl.classList.add("order-upload-preview--visible");
     });
 
     if (sizeSelect) {
@@ -392,93 +418,6 @@ document.addEventListener("DOMContentLoaded", () => {
       submitBtn.textContent = "Checkout";
     }
   });
-
-  // === DTF Transfer Interactive Effects ===
-  const pointLight = document.querySelector("fePointLight");
-  const pointLightFlipped = document.getElementById("fePointLightFlipped");
-  let currentTransferContainer = null;
-  let currentArtworkBase = null;
-  let isDragging = false;
-  let dragOffsetX = 0;
-  let dragOffsetY = 0;
-
-  function getContainingBlockOffset(element) {
-    const containingBlock = element.offsetParent || document.documentElement;
-    const rect = containingBlock.getBoundingClientRect();
-    return {
-      left: rect.left,
-      top: rect.top
-    };
-  }
-
-  function updateLightPosition(mouseX, mouseY) {
-    if (!currentArtworkBase || !pointLight || !pointLightFlipped) return;
-    
-    const rect = currentArtworkBase.getBoundingClientRect();
-    const relativeX = mouseX - rect.left;
-    const relativeY = mouseY - rect.top;
-    
-    pointLight.setAttribute("x", relativeX);
-    pointLight.setAttribute("y", relativeY);
-    pointLightFlipped.setAttribute("x", relativeX);
-    pointLightFlipped.setAttribute("y", rect.height - relativeY);
-  }
-
-  function startDrag(e) {
-    if (!currentTransferContainer) return;
-    isDragging = true;
-    
-    const rect = currentTransferContainer.getBoundingClientRect();
-    const containingBlockOffset = getContainingBlockOffset(currentTransferContainer);
-    
-    dragOffsetX = e.clientX - rect.left;
-    dragOffsetY = e.clientY - rect.top;
-    
-    currentTransferContainer.style.position = "absolute";
-    currentTransferContainer.style.left = rect.left - containingBlockOffset.left + "px";
-    currentTransferContainer.style.top = rect.top - containingBlockOffset.top + "px";
-  }
-
-  function updateDragPosition(e) {
-    if (!isDragging || !currentTransferContainer) return;
-    
-    const containingBlockOffset = getContainingBlockOffset(currentTransferContainer);
-    currentTransferContainer.style.left = e.clientX - dragOffsetX - containingBlockOffset.left + "px";
-    currentTransferContainer.style.top = e.clientY - dragOffsetY - containingBlockOffset.top + "px";
-  }
-
-  function stopDrag() {
-    isDragging = false;
-  }
-
-  // Update references when a new image is loaded
-  const observer = new MutationObserver(() => {
-    const container = previewEl && previewEl.querySelector(".dtf-transfer-container");
-    const artworkBase = container && container.querySelector(".dtf-artwork-base");
-    
-    if (container && artworkBase) {
-      currentTransferContainer = container;
-      currentArtworkBase = artworkBase;
-      
-      // Remove old event listeners
-      container.removeEventListener("mousedown", startDrag);
-      
-      // Add new event listeners
-      container.addEventListener("mousedown", startDrag);
-    }
-  });
-
-  if (previewEl) {
-    observer.observe(previewEl, { childList: true, subtree: true });
-  }
-
-  // Global mouse movement for lighting
-  document.addEventListener("mousemove", (e) => {
-    updateLightPosition(e.clientX, e.clientY);
-    updateDragPosition(e);
-  });
-
-  document.addEventListener("mouseup", stopDrag);
 });
 
 
