@@ -188,21 +188,52 @@ export function create(container) {
       
       const qtyInput = item.querySelector(".gang-auto-pack-qty");
       const packBtn = item.querySelector(".gang-auto-pack-btn");
+      const maxDisplay = item.querySelector(".gang-auto-pack-max");
+      
+      // Update max display when max changes (without recreating the entire list)
+      const updateMaxDisplay = () => {
+        const currentMax = maxInstancesMap.get(design.id) || 9999;
+        qtyInput.max = currentMax;
+        if (currentMax < 9999) {
+          if (maxDisplay) {
+            maxDisplay.textContent = `Max: ${currentMax}`;
+          } else {
+            // Create max display if it doesn't exist
+            const newMaxDisplay = document.createElement("div");
+            newMaxDisplay.className = "gang-auto-pack-max";
+            newMaxDisplay.textContent = `Max: ${currentMax}`;
+            item.appendChild(newMaxDisplay);
+          }
+        } else if (maxDisplay) {
+          maxDisplay.remove();
+        }
+      };
       
       packBtn.addEventListener("click", () => {
         const qty = parseInt(qtyInput.value, 10) || 1;
         const result = store.addInstancesForDesign(design.id, qty, true);
         if (result && result.maxInstances) {
           maxInstancesMap.set(design.id, result.maxInstances);
-          qtyInput.max = result.maxInstances;
-          // Update the max display
-          updateAutoPackList(designFiles);
+          updateMaxDisplay();
         }
         // Preserve the entered quantity
         quantityValues.set(design.id, qtyInput.value);
       });
       
+      // Store update function for external updates
+      item._updateMaxDisplay = updateMaxDisplay;
+      
       autoPackList.appendChild(item);
+    });
+  }
+  
+  // Helper function to update max displays without recreating the list
+  function updateMaxDisplays() {
+    const items = autoPackList.querySelectorAll(".gang-auto-pack-item");
+    items.forEach((item) => {
+      if (item._updateMaxDisplay) {
+        item._updateMaxDisplay();
+      }
     });
   }
 
@@ -344,19 +375,71 @@ export function create(container) {
       updateSizeControls(design);
     });
 
-    // Recalculate max instances when sheet size or design sizes change
+    // Recalculate max instances when sheet size, design sizes, or instances change
     const sheetSize = state.selectedSheetSizeId 
       ? SHEET_SIZES.find((s) => s.id === state.selectedSheetSizeId)
       : null;
     
     if (sheetSize) {
+      // Build occupied areas from all existing instances
+      const deadspaceIn = 0.157; // 4mm
+      const existingOccupiedAreas = state.instances.map((inst) => {
+        if (inst.rotationDeg === 90) {
+          // For rotated graphics, calculate bounding box from center
+          const graphicCenterX = inst.xIn + inst.widthIn / 2;
+          const graphicCenterY = inst.yIn + inst.heightIn / 2;
+          const boxWidth = inst.heightIn + (deadspaceIn * 2);
+          const boxHeight = inst.widthIn + (deadspaceIn * 2);
+          return {
+            xIn: graphicCenterX - boxWidth / 2,
+            yIn: graphicCenterY - boxHeight / 2,
+            widthIn: boxWidth,
+            heightIn: boxHeight,
+          };
+        } else {
+          // Non-rotated: bounding box is graphic + deadspace on all sides
+          return {
+            xIn: inst.xIn - deadspaceIn,
+            yIn: inst.yIn - deadspaceIn,
+            widthIn: inst.widthIn + (deadspaceIn * 2),
+            heightIn: inst.heightIn + (deadspaceIn * 2),
+          };
+        }
+      });
+      
       state.designFiles.forEach((design) => {
         const designWidthIn = design.widthIn || design.naturalWidthPx / 300;
         const designHeightIn = design.heightIn || design.naturalHeightPx / 300;
         
+        // Build occupied areas excluding instances of THIS design
+        // (when calculating max for a design, we want to know how many MORE can fit)
+        const occupiedAreasForThisDesign = state.instances
+          .filter((inst) => inst.designId !== design.id) // Exclude instances of this design
+          .map((inst) => {
+            if (inst.rotationDeg === 90) {
+              const graphicCenterX = inst.xIn + inst.widthIn / 2;
+              const graphicCenterY = inst.yIn + inst.heightIn / 2;
+              const boxWidth = inst.heightIn + (deadspaceIn * 2);
+              const boxHeight = inst.widthIn + (deadspaceIn * 2);
+              return {
+                xIn: graphicCenterX - boxWidth / 2,
+                yIn: graphicCenterY - boxHeight / 2,
+                widthIn: boxWidth,
+                heightIn: boxHeight,
+              };
+            } else {
+              return {
+                xIn: inst.xIn - deadspaceIn,
+                yIn: inst.yIn - deadspaceIn,
+                widthIn: inst.widthIn + (deadspaceIn * 2),
+                heightIn: inst.heightIn + (deadspaceIn * 2),
+              };
+            }
+          });
+        
         // Calculate max instances using the auto-pack algorithm
         // Use a very large quantity to find the actual maximum
-        // Pass empty existing areas since we're calculating max for this design only
+        // Pass existing occupied areas (excluding instances of this design) to account for what's already placed
         const result = autoPackDesign({
           sheetWidthIn: sheetSize.widthIn,
           sheetHeightIn: sheetSize.heightIn,
@@ -364,7 +447,7 @@ export function create(container) {
           designHeightIn,
           quantity: 10000, // Use very large number to get actual max
           tryRotated: true,
-          existingOccupiedAreas: [], // Empty for max calculation
+          existingOccupiedAreas: occupiedAreasForThisDesign,
         });
         
         // The maxInstances returned is the actual maximum that can fit
@@ -372,8 +455,45 @@ export function create(container) {
       });
     }
 
-    // Update auto-pack list
-    updateAutoPackList(state.designFiles);
+    // Check if user is typing in a quantity input
+    const activeElement = document.activeElement;
+    const wasTyping = activeElement && activeElement.classList.contains('gang-auto-pack-qty');
+    const focusedDesignId = wasTyping ? activeElement.dataset.designId : null;
+    const cursorPos = wasTyping ? activeElement.selectionStart : null;
+    const inputValue = wasTyping ? activeElement.value : null;
+    
+    // Only update the list if designs changed, otherwise just update max displays
+    const currentDesignIds = new Set(designFiles.map(d => d.id));
+    const existingDesignIds = new Set(
+      Array.from(autoPackList.querySelectorAll('.gang-auto-pack-item'))
+        .map(item => item.querySelector('.gang-auto-pack-qty')?.dataset.designId)
+        .filter(Boolean)
+    );
+    
+    const designsChanged = 
+      currentDesignIds.size !== existingDesignIds.size ||
+      Array.from(currentDesignIds).some(id => !existingDesignIds.has(id)) ||
+      Array.from(existingDesignIds).some(id => !currentDesignIds.has(id));
+    
+    if (designsChanged) {
+      // Designs changed, need to recreate the list
+      updateAutoPackList(state.designFiles);
+      
+      // Restore focus if user was typing
+      if (wasTyping && focusedDesignId) {
+        const restoredInput = autoPackList.querySelector(`.gang-auto-pack-qty[data-design-id="${focusedDesignId}"]`);
+        if (restoredInput) {
+          restoredInput.value = inputValue;
+          restoredInput.focus();
+          if (cursorPos !== null && cursorPos !== undefined) {
+            restoredInput.setSelectionRange(cursorPos, cursorPos);
+          }
+        }
+      }
+    } else {
+      // Designs didn't change, just update max displays
+      updateMaxDisplays();
+    }
 
     // Update size controls if design still exists
     if (selectedDesignForSize) {
