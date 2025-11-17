@@ -74,10 +74,18 @@ export function create(container) {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Calculate scale to fit sheet in canvas - zoom in more (95% instead of 90%)
-    const scaleX = canvas.width / convertInchesToPixels(sheetSize.widthIn);
-    const scaleY = canvas.height / convertInchesToPixels(sheetSize.heightIn);
-    const scale = Math.min(scaleX, scaleY) * 0.95; // 95% to leave minimal padding
+    // Calculate scale to make sheet width take up 80% of canvas width
+    const targetSheetWidthPx = canvas.width * 0.8;
+    const scaleX = targetSheetWidthPx / convertInchesToPixels(sheetSize.widthIn);
+    
+    // Also check height to ensure it fits
+    const scaledHeightPx = convertInchesToPixels(sheetSize.heightIn) * scaleX;
+    const scaleY = canvas.height > scaledHeightPx 
+      ? scaleX 
+      : (canvas.height * 0.8) / convertInchesToPixels(sheetSize.heightIn);
+    
+    // Use the smaller scale to ensure it fits both dimensions
+    const scale = Math.min(scaleX, scaleY);
 
     const sheetWidthPx = convertInchesToPixels(sheetSize.widthIn) * scale;
     const sheetHeightPx = convertInchesToPixels(sheetSize.heightIn) * scale;

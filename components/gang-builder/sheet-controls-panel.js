@@ -245,20 +245,36 @@ export function create(container) {
     }
   }
 
-  // Update DPI as user types
+  // Calculate aspect ratio from natural dimensions
+  function getAspectRatio(design) {
+    if (!design) return 1;
+    return design.naturalWidthPx / design.naturalHeightPx;
+  }
+
+  // Update DPI as user types, maintaining aspect ratio
   sizeWidthInput.addEventListener("input", () => {
     if (selectedDesignForSize) {
       const width = parseFloat(sizeWidthInput.value) || 0;
-      const height = parseFloat(sizeHeightInput.value) || 0;
-      updateDPI(selectedDesignForSize, width, height);
+      if (width > 0) {
+        // Calculate height to maintain aspect ratio
+        const aspectRatio = getAspectRatio(selectedDesignForSize);
+        const height = width / aspectRatio;
+        sizeHeightInput.value = height.toFixed(2);
+        updateDPI(selectedDesignForSize, width, height);
+      }
     }
   });
 
   sizeHeightInput.addEventListener("input", () => {
     if (selectedDesignForSize) {
-      const width = parseFloat(sizeWidthInput.value) || 0;
       const height = parseFloat(sizeHeightInput.value) || 0;
-      updateDPI(selectedDesignForSize, width, height);
+      if (height > 0) {
+        // Calculate width to maintain aspect ratio
+        const aspectRatio = getAspectRatio(selectedDesignForSize);
+        const width = height * aspectRatio;
+        sizeWidthInput.value = width.toFixed(2);
+        updateDPI(selectedDesignForSize, width, height);
+      }
     }
   });
 

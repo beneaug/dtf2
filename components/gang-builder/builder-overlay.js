@@ -43,8 +43,25 @@ export function createBuilderOverlay(container, onClose) {
   const canvasContainer = overlay.querySelector("#gang-builder-canvas");
   const statsContainer = overlay.querySelector("#gang-builder-stats");
 
+  // Lock body scroll when overlay is open
+  const originalOverflow = document.body.style.overflow;
+  const originalPosition = document.body.style.position;
+  const scrollY = window.scrollY;
+  
+  document.body.style.overflow = "hidden";
+  document.body.style.position = "fixed";
+  document.body.style.width = "100%";
+  document.body.style.top = `-${scrollY}px`;
+
   // Close handlers
   const handleClose = () => {
+    // Restore body scroll
+    document.body.style.overflow = originalOverflow;
+    document.body.style.position = originalPosition;
+    document.body.style.width = "";
+    document.body.style.top = "";
+    window.scrollTo(0, scrollY);
+    
     overlay.remove();
     if (onClose) onClose();
   };
