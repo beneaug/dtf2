@@ -74,31 +74,18 @@ export function create(container) {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Calculate scale to maximize sheet size - use a much higher effective PPI
-    // This gives us aggressive zoom by treating inches as more pixels
-    const effectivePPI = 100; // Much higher than base 20 PPI for very aggressive zoom
+    // Calculate scale to fit sheet in canvas with minimal padding
+    const baseSheetWidthPx = convertInchesToPixels(sheetSize.widthIn);
+    const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
     
-    // Calculate what the sheet size would be at this PPI
-    const sheetWidthAtPPI = sheetSize.widthIn * effectivePPI;
-    const sheetHeightAtPPI = sheetSize.heightIn * effectivePPI;
+    const scaleX = (canvas.width * 0.95) / baseSheetWidthPx;
+    const scaleY = (canvas.height * 0.95) / baseSheetHeightPx;
     
-    // Calculate scale to fill 98% of canvas
-    const targetWidthPx = canvas.width * 0.98;
-    const targetHeightPx = canvas.height * 0.98;
-    
-    const scaleForWidth = targetWidthPx / sheetWidthAtPPI;
-    const scaleForHeight = targetHeightPx / sheetHeightAtPPI;
-    
-    // Use the smaller scale to ensure it fits
-    const scale = Math.min(scaleForWidth, scaleForHeight);
-    
-    // Now convert using the base PPI and apply our calculated scale
-    // The scale effectively multiplies the base PPI conversion
+    // Use the smaller scale to ensure it fits both dimensions
+    const scale = Math.min(scaleX, scaleY);
 
-    // Calculate final pixel dimensions using the effective scale
-    // This gives us much larger rendering than the base 20 PPI
-    const sheetWidthPx = sheetSize.widthIn * effectivePPI * scale;
-    const sheetHeightPx = sheetSize.heightIn * effectivePPI * scale;
+    const sheetWidthPx = baseSheetWidthPx * scale;
+    const sheetHeightPx = baseSheetHeightPx * scale;
     const offsetX = (canvas.width - sheetWidthPx) / 2;
     const offsetY = (canvas.height - sheetHeightPx) / 2;
 
@@ -106,7 +93,7 @@ export function create(container) {
     if (state.snapIncrement > 0) {
       ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
       ctx.lineWidth = 1;
-      const gridSizePx = state.snapIncrement * effectivePPI * scale;
+      const gridSizePx = convertInchesToPixels(state.snapIncrement) * scale;
       for (let x = offsetX; x < offsetX + sheetWidthPx; x += gridSizePx) {
         ctx.beginPath();
         ctx.moveTo(x, offsetY);
@@ -201,7 +188,6 @@ export function create(container) {
       offsetY,
       scale,
       sheetSize,
-      effectivePPI,
     };
   }
 
@@ -211,11 +197,11 @@ export function create(container) {
     const ctx = canvas._renderContext;
     if (!ctx) return null;
 
-    const { offsetX, offsetY, scale, sheetSize, effectivePPI } = ctx;
+    const { offsetX, offsetY, scale, sheetSize } = ctx;
 
-    // Convert mouse coords to inches using the effective PPI
-    const mouseXIn = (mouseX - offsetX) / (effectivePPI * scale);
-    const mouseYIn = (mouseY - offsetY) / (effectivePPI * scale);
+    // Convert mouse coords to inches
+    const mouseXIn = convertPixelsToInches((mouseX - offsetX) / scale);
+    const mouseYIn = convertPixelsToInches((mouseY - offsetY) / scale);
 
     // Find instance at point (check in reverse order for top-most)
     for (let i = state.instances.length - 1; i >= 0; i--) {
@@ -259,18 +245,17 @@ export function create(container) {
     const ctx = canvas._renderContext;
     if (!ctx) return;
 
-    const { offsetX, offsetY, scale, effectivePPI } = ctx;
+    const { offsetX, offsetY, scale } = ctx;
     const state = store.getState();
     const instance = state.instances.find((i) => i.id === dragInstanceId);
     if (!instance) return;
 
     // Calculate new position
-    const deltaX = (mouseX - dragStartX);
-    const deltaY = (mouseY - dragStartY);
+    const deltaX = (mouseX - dragStartX) / scale;
+    const deltaY = (mouseY - dragStartY) / scale;
 
-    // Convert delta pixels to inches using effective PPI
-    let newX = instance.xIn + deltaX / (effectivePPI * scale);
-    let newY = instance.yIn + deltaY / (effectivePPI * scale);
+    let newX = instance.xIn + convertPixelsToInches(deltaX);
+    let newY = instance.yIn + convertPixelsToInches(deltaY);
 
     // Apply snapping
     if (state.snapIncrement > 0) {
