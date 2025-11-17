@@ -191,19 +191,20 @@ export function create(container) {
       const boxHeightPx = (isRotated ? baseWidthPx : baseHeightPx) + (deadspacePx * 2);
       
       // Calculate center point of the bounding box
-      // For non-rotated: center is at xIn + width/2, yIn + height/2
-      // For rotated: the bounding box is swapped, so center calculation needs to account for that
-      let centerX, centerY;
-      if (isRotated) {
-        // For rotated instances, xIn/yIn is the top-left of the original graphic
-        // The bounding box center is at: xIn + height/2, yIn + width/2 (swapped)
-        centerX = offsetX + convertInchesToPixels(instance.xIn) * scale + baseHeightPx / 2;
-        centerY = offsetY + convertInchesToPixels(instance.yIn) * scale + baseWidthPx / 2;
-      } else {
-        // For non-rotated, center is straightforward
-        centerX = offsetX + convertInchesToPixels(instance.xIn) * scale + baseWidthPx / 2;
-        centerY = offsetY + convertInchesToPixels(instance.yIn) * scale + baseHeightPx / 2;
-      }
+      // The instance.xIn and instance.yIn represent the top-left of the graphic (before rotation)
+      // The bounding box includes deadspace, so:
+      // - Bounding box top-left = graphic top-left - deadspace
+      // - Bounding box center = bounding box top-left + box dimensions / 2
+      const graphicX = offsetX + convertInchesToPixels(instance.xIn) * scale;
+      const graphicY = offsetY + convertInchesToPixels(instance.yIn) * scale;
+      
+      // Bounding box top-left (with deadspace)
+      const boxTopLeftX = graphicX - deadspacePx;
+      const boxTopLeftY = graphicY - deadspacePx;
+      
+      // Bounding box center
+      const centerX = boxTopLeftX + boxWidthPx / 2;
+      const centerY = boxTopLeftY + boxHeightPx / 2;
 
       const isSelected = instance.id === state.selectedInstanceId;
 
