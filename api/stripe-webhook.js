@@ -13,13 +13,20 @@ const stripe =
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 module.exports = (req, res) => {
+  console.log("=== WEBHOOK CALLED ===");
+  console.log("Method:", req.method);
+  console.log("URL:", req.url);
+  console.log("Headers:", JSON.stringify(req.headers, null, 2));
+  
   if (req.method !== "POST") {
+    console.log("Wrong method, returning 405");
     res.statusCode = 405;
     res.setHeader("Allow", "POST");
     return res.end(JSON.stringify({ error: "Method not allowed. Use POST." }));
   }
 
   if (!stripe || !webhookSecret) {
+    console.error("Stripe not configured!");
     res.statusCode = 500;
     return res.end(
       JSON.stringify({
@@ -28,6 +35,8 @@ module.exports = (req, res) => {
       })
     );
   }
+  
+  console.log("Stripe configured, processing webhook...");
 
   const chunks = [];
   req.on("data", (chunk) => {
@@ -35,6 +44,7 @@ module.exports = (req, res) => {
   });
 
   req.on("end", async () => {
+    console.log("Received webhook body, length:", chunks.reduce((sum, c) => sum + c.length, 0));
     const rawBody = Buffer.concat(chunks);
     let event;
     try {
@@ -43,13 +53,17 @@ module.exports = (req, res) => {
         req.headers["stripe-signature"],
         webhookSecret
       );
+      console.log("Webhook event constructed. Type:", event.type);
+      console.log("Event ID:", event.id);
     } catch (err) {
       console.error("Stripe webhook signature verification failed.", err);
+      console.error("Error message:", err.message);
       res.statusCode = 400;
       return res.end(JSON.stringify({ error: "Invalid Stripe signature." }));
     }
 
     if (event.type === "checkout.session.completed") {
+      console.log("=== PROCESSING checkout.session.completed ===");
       const session = event.data.object;
       const m = session.metadata || {};
 
