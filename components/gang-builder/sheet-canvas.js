@@ -51,13 +51,25 @@ export function create(container) {
     });
   }
 
-  // Resize canvas to fit container
+  // Resize canvas to fit container with high DPI support
   function resizeCanvas() {
     const rect = canvasContainer.getBoundingClientRect();
     // Ensure we have valid dimensions
     if (rect.width > 0 && rect.height > 0) {
-      canvas.width = rect.width;
-      canvas.height = rect.height;
+      // Use device pixel ratio for high DPI displays
+      const dpr = window.devicePixelRatio || 1;
+      
+      // Set actual canvas size in memory (scaled by DPR)
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      
+      // Set display size (CSS pixels)
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      
+      // Scale the context to match DPR
+      ctx.scale(dpr, dpr);
+      
       render();
     } else {
       // Retry after a short delay if container isn't sized yet
@@ -71,25 +83,29 @@ export function create(container) {
     const sheetSize = getSheetSize(state.selectedSheetSizeId);
     if (!sheetSize) return;
 
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Get canvas display size (CSS pixels, not scaled by DPR)
+    const dpr = window.devicePixelRatio || 1;
+    const displayWidth = canvas.width / dpr;
+    const displayHeight = canvas.height / dpr;
 
+    // Clear canvas (use actual canvas dimensions)
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
     // Calculate base dimensions
     const baseSheetWidthPx = convertInchesToPixels(sheetSize.widthIn);
     const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
     
-    // Calculate scale to fit, then apply zoom multiplier for closer view
-    const zoomMultiplier = 1.8; // Increase this number for more zoom
-    const scaleX = ((canvas.width * 0.95) / baseSheetWidthPx) * zoomMultiplier;
-    const scaleY = ((canvas.height * 0.95) / baseSheetHeightPx) * zoomMultiplier;
+    // Calculate scale to fit sheet to 90% of canvas (leaves padding, prevents cutoff)
+    const scaleX = (displayWidth * 0.9) / baseSheetWidthPx;
+    const scaleY = (displayHeight * 0.9) / baseSheetHeightPx;
     
     // Use the smaller scale to ensure it fits both dimensions
     const scale = Math.min(scaleX, scaleY);
 
     const sheetWidthPx = baseSheetWidthPx * scale;
     const sheetHeightPx = baseSheetHeightPx * scale;
-    const offsetX = (canvas.width - sheetWidthPx) / 2;
-    const offsetY = (canvas.height - sheetHeightPx) / 2;
+    const offsetX = (displayWidth - sheetWidthPx) / 2;
+    const offsetY = (displayHeight - sheetHeightPx) / 2;
 
     // Draw grid (subtle)
     if (state.snapIncrement > 0) {
@@ -126,7 +142,7 @@ export function create(container) {
     ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
     ctx.font = "12px system-ui";
     ctx.textAlign = "center";
-    ctx.fillText(sheetSize.label, canvas.width / 2, offsetY - 10);
+    ctx.fillText(sheetSize.label, displayWidth / 2, offsetY - 10);
 
     // Draw instances
     state.instances.forEach((instance) => {
@@ -184,12 +200,14 @@ export function create(container) {
       ctx.fillText(design.name.substring(0, 20), x + 4, y + 14);
     });
 
-    // Store render context for mouse events
+    // Store render context for mouse events (use display dimensions)
     canvas._renderContext = {
       offsetX,
       offsetY,
       scale,
       sheetSize,
+      displayWidth,
+      displayHeight,
     };
   }
 
