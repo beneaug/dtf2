@@ -85,55 +85,43 @@ module.exports = (req, res) => {
       const garmentColor = fields.garmentColor || null;
       const notes = fields.notes || null;
       
-      // Extract gang sheet data if present
-      let gangSheetData = null;
-      let preOrderId = null;
+      // Extract gang sheet data if present - store in temporary table
+      let gangSheetDataId = null;
       if (fields.gangSheetData) {
         try {
-          gangSheetData = JSON.parse(fields.gangSheetData);
+          const gangSheetData = JSON.parse(fields.gangSheetData);
           
-          // Store gang sheet data in database BEFORE Stripe checkout
+          // Store in a simple temporary storage table with UUID
           // This avoids Stripe's 500 character metadata limit
           if (pool && gangSheetData) {
             try {
               const client = await pool.connect();
               try {
-                // For JSONB columns, pg library can accept either JSON string or object
-                // Pass as object to let pg handle the conversion
-                console.log("Creating pre-order with gang_sheet_data, size:", JSON.stringify(gangSheetData).length, "chars");
+                // Create storage table if it doesn't exist (idempotent)
+                await client.query(`
+                  CREATE TABLE IF NOT EXISTS gang_sheet_data_storage (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    data JSONB NOT NULL,
+                    created_at TIMESTAMP DEFAULT NOW()
+                  )
+                `);
+                
+                // Insert the data
                 const result = await client.query(
-                  `INSERT INTO dtf_orders
-                     (mode, size, quantity, transfer_name, garment_color, notes,
-                      files, unit_price_cents, total_price_cents, status, gang_sheet_data)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10::jsonb)
-                   RETURNING id, gang_sheet_data`,
-                  [
-                    mode,
-                    size,
-                    quantity,
-                    transferName,
-                    garmentColor,
-                    notes,
-                    JSON.stringify(uploadedFiles),
-                    unitPriceCents,
-                    totalPriceCents,
-                    gangSheetData, // Pass object directly, let pg convert to JSONB
-                  ]
+                  `INSERT INTO gang_sheet_data_storage (data) VALUES ($1::jsonb) RETURNING id`,
+                  [gangSheetData]
                 );
+                
                 if (result.rows.length > 0) {
-                  preOrderId = result.rows[0].id;
-                  const savedData = result.rows[0].gang_sheet_data;
-                  console.log("✓ Created pre-order ID:", preOrderId, "gang_sheet_data saved:", savedData ? "yes" : "NO - NULL!");
-                  if (!savedData) {
-                    console.error("ERROR: gang_sheet_data was not saved to pre-order! This indicates a database issue.");
-                  }
+                  gangSheetDataId = result.rows[0].id;
+                  console.log("✓ Stored gang sheet data with ID:", gangSheetDataId);
                 }
               } finally {
                 client.release();
               }
             } catch (dbErr) {
-              console.error("Failed to store gang sheet data in database:", dbErr);
-              // Continue anyway - webhook will try to handle it
+              console.error("Failed to store gang sheet data:", dbErr);
+              console.error("Error details:", dbErr.message);
             }
           }
         } catch (e) {
@@ -158,7 +146,7 @@ module.exports = (req, res) => {
       if (stripe && totalPriceCents && totalPriceCents > 0) {
         const origin = (req.headers.origin || "").replace(/\/$/, "");
         
-        // Build metadata - only include order ID reference if we have gang sheet data
+        // Build metadata - include gang sheet data ID if we have it
         const metadata = {
           mode,
           size,
@@ -173,9 +161,9 @@ module.exports = (req, res) => {
             totalPriceCents != null ? String(totalPriceCents) : "",
         };
         
-        // If we stored gang sheet data, only include the order ID reference
-        if (preOrderId) {
-          metadata.preOrderId = String(preOrderId);
+        // If we stored gang sheet data, include the storage ID (UUID is short)
+        if (gangSheetDataId) {
+          metadata.gangSheetDataId = String(gangSheetDataId);
         }
         
         const session = await stripe.checkout.sessions.create({
