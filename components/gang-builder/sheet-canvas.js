@@ -181,40 +181,43 @@ export function create(container) {
       const deadspaceIn = 0.157; // 4mm in inches
       const deadspacePx = convertInchesToPixels(deadspaceIn) * scale;
       
-      const x = offsetX + convertInchesToPixels(instance.xIn) * scale;
-      const y = offsetY + convertInchesToPixels(instance.yIn) * scale;
-      const width = convertInchesToPixels(instance.widthIn) * scale;
-      const height = convertInchesToPixels(instance.heightIn) * scale;
+      // Get base dimensions
+      let baseWidth = convertInchesToPixels(instance.widthIn) * scale;
+      let baseHeight = convertInchesToPixels(instance.heightIn) * scale;
       
-      // Bounding box includes deadspace
-      const boxX = x - deadspacePx;
-      const boxY = y - deadspacePx;
-      const boxWidth = width + (deadspacePx * 2);
-      const boxHeight = height + (deadspacePx * 2);
+      // When rotated 90 degrees, swap width and height for the bounding box
+      const isRotated = instance.rotationDeg === 90;
+      const boxWidth = (isRotated ? baseHeight : baseWidth) + (deadspacePx * 2);
+      const boxHeight = (isRotated ? baseWidth : baseHeight) + (deadspacePx * 2);
+      
+      // Calculate center point (instance position is top-left of the graphic)
+      const centerX = offsetX + convertInchesToPixels(instance.xIn) * scale + baseWidth / 2;
+      const centerY = offsetY + convertInchesToPixels(instance.yIn) * scale + baseHeight / 2;
 
       const isSelected = instance.id === state.selectedInstanceId;
 
-      // Draw instance background (with deadspace)
+      // Draw bounding box and image together with rotation
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      if (instance.rotationDeg) {
+        ctx.rotate((instance.rotationDeg * Math.PI) / 180);
+      }
+      
+      // Draw instance background (with deadspace) - centered at origin after translation
       ctx.fillStyle = isSelected ? "rgba(255, 255, 255, 0.15)" : "rgba(255, 255, 255, 0.08)";
-      ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+      ctx.fillRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight);
 
       // Draw instance border (with deadspace)
       ctx.strokeStyle = isSelected ? "rgba(255, 255, 255, 0.6)" : "rgba(255, 255, 255, 0.3)";
       ctx.lineWidth = isSelected ? 2 : 1;
-      ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+      ctx.strokeRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight);
 
-      // Draw design image (if loaded) - draw at actual position (not including deadspace in image position)
+      // Draw design image - centered at origin
       if (design.url) {
         const cachedImg = imageCache.get(design.url);
         if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
-          // Image is cached and loaded, draw it at the instance position (not the box position)
-          ctx.save();
-          ctx.translate(x + width / 2, y + height / 2);
-          if (instance.rotationDeg) {
-            ctx.rotate((instance.rotationDeg * Math.PI) / 180);
-          }
-          ctx.drawImage(cachedImg, -width / 2, -height / 2, width, height);
-          ctx.restore();
+          // Draw image centered (no additional rotation needed, already rotated)
+          ctx.drawImage(cachedImg, -baseWidth / 2, -baseHeight / 2, baseWidth, baseHeight);
         } else {
           // Preload the image if not cached
           preloadImage(design.url)
@@ -225,11 +228,13 @@ export function create(container) {
             .catch(() => {
               // Draw placeholder if image fails to load
               ctx.fillStyle = "rgba(100, 100, 100, 0.3)";
-              ctx.fillRect(x, y, width, height);
+              ctx.fillRect(-baseWidth / 2, -baseHeight / 2, baseWidth, baseHeight);
               render();
             });
         }
       }
+      
+      ctx.restore();
 
       // Filename text removed per user request
     });
@@ -254,24 +259,38 @@ export function create(container) {
     const { offsetX, offsetY, scale } = ctx;
     const deadspaceIn = 0.157; // 4mm in inches
 
-    // Convert mouse coords to inches
+    // Convert mouse coords to canvas pixels, then to inches
     const mouseXIn = convertPixelsToInches((mouseX - offsetX) / scale);
     const mouseYIn = convertPixelsToInches((mouseY - offsetY) / scale);
 
     // Find instance at point (check in reverse order for top-most)
-    // Account for deadspace padding in bounding box
+    // Account for rotation and deadspace padding in bounding box
     for (let i = state.instances.length - 1; i >= 0; i--) {
       const instance = state.instances[i];
-      const boxX = instance.xIn - deadspaceIn;
-      const boxY = instance.yIn - deadspaceIn;
-      const boxWidth = instance.widthIn + (deadspaceIn * 2);
-      const boxHeight = instance.heightIn + (deadspaceIn * 2);
+      const isRotated = instance.rotationDeg === 90;
+      
+      // Get bounding box dimensions (swap if rotated)
+      const boxWidth = (isRotated ? instance.heightIn : instance.widthIn) + (deadspaceIn * 2);
+      const boxHeight = (isRotated ? instance.widthIn : instance.heightIn) + (deadspaceIn * 2);
+      
+      // Calculate center point of the instance
+      const centerX = instance.xIn + instance.widthIn / 2;
+      const centerY = instance.yIn + instance.heightIn / 2;
+      
+      // Check if mouse is within bounding box (accounting for rotation)
+      // For rotated instances, we need to check relative to the center
+      const relX = mouseXIn - centerX;
+      const relY = mouseYIn - centerY;
+      
+      // If rotated, swap the relative coordinates
+      const checkX = isRotated ? relY : relX;
+      const checkY = isRotated ? -relX : relY;
       
       if (
-        mouseXIn >= boxX &&
-        mouseXIn <= boxX + boxWidth &&
-        mouseYIn >= boxY &&
-        mouseYIn <= boxY + boxHeight
+        checkX >= -boxWidth / 2 &&
+        checkX <= boxWidth / 2 &&
+        checkY >= -boxHeight / 2 &&
+        checkY <= boxHeight / 2
       ) {
         return instance;
       }
