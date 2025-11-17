@@ -14,14 +14,14 @@ import { convertInchesToPixels, convertPixelsToInches, snapToGrid, isWithinBound
  */
 export function create(container) {
   container.innerHTML = `
-    <div class="gang-canvas-wrapper">
+    <div class="gang-canvas-wrapper" id="gang-canvas-wrapper">
       <div class="gang-canvas-container" id="gang-canvas-container">
         <canvas id="gang-canvas"></canvas>
-        <div class="gang-zoom-controls">
-          <button class="gang-zoom-btn" id="gang-zoom-out" aria-label="Zoom out">−</button>
-          <span class="gang-zoom-level" id="gang-zoom-level">150%</span>
-          <button class="gang-zoom-btn" id="gang-zoom-in" aria-label="Zoom in">+</button>
-        </div>
+      </div>
+      <div class="gang-zoom-controls">
+        <button class="gang-zoom-btn" id="gang-zoom-out" aria-label="Zoom out">−</button>
+        <span class="gang-zoom-level" id="gang-zoom-level">150%</span>
+        <button class="gang-zoom-btn" id="gang-zoom-in" aria-label="Zoom in">+</button>
       </div>
     </div>
   `;
@@ -525,10 +525,13 @@ export function create(container) {
       }
     });
     
-    // If sheet size changed, resize canvas and scroll to top
+    // If sheet size changed, reset zoom and resize canvas
     const sheetSizeChanged = lastSheetSizeId !== null && lastSheetSizeId !== state.selectedSheetSizeId;
     if (sheetSizeChanged) {
       lastSheetSizeId = state.selectedSheetSizeId;
+      // Reset zoom to default when sheet size changes
+      zoomLevel = 1.5;
+      updateZoomDisplay();
       // Resize canvas when sheet size changes
       resizeCanvas();
       // Scroll to top after resize completes
