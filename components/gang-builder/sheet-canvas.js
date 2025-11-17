@@ -123,11 +123,14 @@ export function create(container) {
     const sheetWidthPx = baseSheetWidthPx * scale;
     const sheetHeightPx = baseSheetHeightPx * scale;
     
-    // Center the sheet, but allow it to extend beyond canvas if needed
-    const offsetX = Math.max(0, (displayWidth - sheetWidthPx) / 2);
-    const offsetY = Math.max(0, (displayHeight - sheetHeightPx) / 2);
+    // Position sheet at top-left (with padding from wrapper)
+    // The wrapper has padding: 2rem, so we account for that
+    const paddingPx = 32; // 2rem = 32px
+    const offsetX = paddingPx;
+    const offsetY = paddingPx;
     
     // Resize canvas to fit the sheet if it's larger than display
+    // Canvas should be at least as large as the sheet plus padding
     const neededCanvasWidth = Math.max(displayWidth, sheetWidthPx + offsetX * 2);
     const neededCanvasHeight = Math.max(displayHeight, sheetHeightPx + offsetY * 2);
     
@@ -412,17 +415,24 @@ export function create(container) {
       }
     });
     
-    // If sheet size changed, scroll to top
-    if (lastSheetSizeId !== null && lastSheetSizeId !== state.selectedSheetSizeId) {
-      // Scroll wrapper to top when sheet size changes
-      if (canvasWrapper) {
-        canvasWrapper.scrollTop = 0;
-        canvasWrapper.scrollLeft = 0;
-      }
-    }
+    // If sheet size changed, scroll to top after render
+    const sheetSizeChanged = lastSheetSizeId !== null && lastSheetSizeId !== state.selectedSheetSizeId;
     lastSheetSizeId = state.selectedSheetSizeId;
     
     render();
+    
+    // Scroll to top after render completes
+    if (sheetSizeChanged) {
+      // Use double requestAnimationFrame to ensure render is complete
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (canvasWrapper) {
+            canvasWrapper.scrollTop = 0;
+            canvasWrapper.scrollLeft = 0;
+          }
+        });
+      });
+    }
   });
 
   // Initial render and resize handling
