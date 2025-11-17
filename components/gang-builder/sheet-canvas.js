@@ -83,22 +83,26 @@ export function create(container) {
       // Use device pixel ratio for high DPI displays
       const dpr = window.devicePixelRatio || 1;
       
-      // Calculate needed canvas size based on sheet size
+      // Calculate needed canvas size based on sheet size and zoom
       const state = store.getState();
       const sheetSize = getSheetSize(state.selectedSheetSizeId);
       if (sheetSize) {
         const baseSheetWidthPx = convertInchesToPixels(sheetSize.widthIn);
         const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
         
-        // Calculate scale to fit in container (with some padding)
+        // Calculate base scale to fit in container (with some padding)
         const fitScaleX = (containerWidth * 0.95) / baseSheetWidthPx;
         const fitScaleY = (containerHeight * 0.95) / baseSheetHeightPx;
-        const fitScale = Math.min(fitScaleX, fitScaleY);
+        const baseScale = Math.min(fitScaleX, fitScaleY);
         
-        const sheetWidthPx = baseSheetWidthPx * fitScale;
-        const sheetHeightPx = baseSheetHeightPx * fitScale;
+        // Apply zoom level
+        const scale = baseScale * zoomLevel;
+        
+        const sheetWidthPx = baseSheetWidthPx * scale;
+        const sheetHeightPx = baseSheetHeightPx * scale;
         
         const paddingPx = 32;
+        // Canvas needs to be large enough for the zoomed sheet
         const neededWidth = Math.max(containerWidth, sheetWidthPx + paddingPx * 2);
         const neededHeight = Math.max(containerHeight, sheetHeightPx + paddingPx * 2);
         
@@ -160,10 +164,14 @@ export function create(container) {
     const sheetWidthPx = baseSheetWidthPx * scale;
     const sheetHeightPx = baseSheetHeightPx * scale;
     
-    // Position sheet - center horizontally, top-aligned vertically for scrolling
+    // Position sheet - center horizontally and vertically when zoomed, top-aligned when fitting
     const paddingPx = 32; // 2rem = 32px
+    // Center horizontally
     const offsetX = Math.max(paddingPx, (canvasWidth - sheetWidthPx) / 2);
-    const offsetY = paddingPx; // Always start at top for scrolling
+    // Center vertically if sheet is smaller than canvas, otherwise top-align for scrolling
+    const offsetY = sheetHeightPx < canvasHeight 
+      ? (canvasHeight - sheetHeightPx) / 2 
+      : paddingPx;
 
     // Draw grid (subtle)
     if (state.snapIncrement > 0) {
@@ -491,7 +499,8 @@ export function create(container) {
     // Clamp zoom between 0.25x (25%) and 4x (400%)
     zoomLevel = Math.max(0.25, Math.min(4.0, level));
     updateZoomDisplay();
-    render();
+    // Resize canvas to accommodate new zoom level, then render
+    resizeCanvas();
   }
 
   zoomOutBtn.addEventListener("click", () => {
