@@ -84,6 +84,7 @@ module.exports = (req, res) => {
       let existingOrder = null;
       
       console.log("Metadata tempOrderId:", m.tempOrderId, "parsed:", tempOrderId);
+      console.log("Metadata mode:", m.mode);
       
       // Try to find existing order by tempOrderId first
       if (tempOrderId) {
@@ -120,67 +121,66 @@ module.exports = (req, res) => {
         }
       }
       
-      // Fallback: Look for pending orders with gang_sheet_data that match this checkout
-      // This handles cases where tempOrderId wasn't passed or order wasn't found
-      if (!existingOrder) {
-        console.log("No order found by tempOrderId, searching for pending orders with gang_sheet_data");
+      // Fallback: If mode is gang-sheet, find the most recent pending order with gang_sheet_data
+      // Match by files array to ensure we get the right one
+      if (!existingOrder && m.mode === 'gang-sheet' && files && files.length > 0) {
+        console.log("No order found by tempOrderId, searching by files array for gang-sheet order");
         try {
           const checkClient = await pool.connect();
           try {
-            // Find most recent pending order with gang_sheet_data (created in last 15 minutes)
-            // Also check if mode matches to be more specific
+            // Parse files from metadata to compare
+            let metadataFiles = [];
+            try {
+              metadataFiles = typeof m.files === 'string' ? JSON.parse(m.files) : m.files;
+            } catch (e) {
+              console.error("Failed to parse files from metadata:", e);
+            }
+            
+            // Find pending orders with gang_sheet_data and matching file count
             const checkResult = await checkClient.query(
-              `SELECT id, gang_sheet_data, stripe_session_id, created_at, mode
+              `SELECT id, gang_sheet_data, stripe_session_id, created_at, files
                FROM dtf_orders 
                WHERE stripe_session_id LIKE 'pending-%' 
                  AND gang_sheet_data IS NOT NULL
-                 AND created_at > NOW() - INTERVAL '15 minutes'
+                 AND mode = 'gang-sheet'
+                 AND created_at > NOW() - INTERVAL '10 minutes'
                ORDER BY created_at DESC
-               LIMIT 1`,
+               LIMIT 5`,
               []
             );
-            if (checkResult.rows.length > 0) {
+            
+            // Find the one with matching files
+            for (const row of checkResult.rows) {
+              let orderFiles = [];
+              try {
+                orderFiles = typeof row.files === 'string' ? JSON.parse(row.files) : row.files;
+              } catch (e) {
+                continue;
+              }
+              
+              // Compare file counts and names
+              if (Array.isArray(orderFiles) && Array.isArray(metadataFiles) && 
+                  orderFiles.length === metadataFiles.length) {
+                const orderFileNames = orderFiles.map(f => f.filename || f.name || '').sort();
+                const metaFileNames = metadataFiles.map(f => f.filename || f.name || '').sort();
+                if (JSON.stringify(orderFileNames) === JSON.stringify(metaFileNames)) {
+                  existingOrder = row;
+                  console.log("✓ Found matching order by files array:", existingOrder.id);
+                  break;
+                }
+              }
+            }
+            
+            if (!existingOrder && checkResult.rows.length > 0) {
+              // Fallback to most recent if no exact match
               existingOrder = checkResult.rows[0];
-              console.log("✓ Found pending order with gang_sheet_data:", existingOrder.id);
-              console.log("  Created at:", existingOrder.created_at);
-              console.log("  Session_id:", existingOrder.stripe_session_id);
-              console.log("  Mode:", existingOrder.mode);
-            } else {
-              console.log("No pending orders with gang_sheet_data found");
+              console.log("✓ Using most recent pending gang-sheet order:", existingOrder.id);
             }
           } finally {
             checkClient.release();
           }
         } catch (dbErr) {
           console.error("Failed to search for pending orders:", dbErr);
-        }
-      }
-      
-      // If we still don't have an order but mode is gang-sheet, look for ANY pending order
-      if (!existingOrder && m.mode === 'gang-sheet') {
-        console.log("Mode is gang-sheet but no order found, searching for any pending order");
-        try {
-          const checkClient = await pool.connect();
-          try {
-            const checkResult = await checkClient.query(
-              `SELECT id, gang_sheet_data, stripe_session_id, created_at
-               FROM dtf_orders 
-               WHERE stripe_session_id LIKE 'pending-%'
-                 AND mode = 'gang-sheet'
-                 AND created_at > NOW() - INTERVAL '15 minutes'
-               ORDER BY created_at DESC
-               LIMIT 1`,
-              []
-            );
-            if (checkResult.rows.length > 0) {
-              existingOrder = checkResult.rows[0];
-              console.log("✓ Found pending gang-sheet order:", existingOrder.id);
-            }
-          } finally {
-            checkClient.release();
-          }
-        } catch (dbErr) {
-          console.error("Failed to search for pending gang-sheet orders:", dbErr);
         }
       }
       

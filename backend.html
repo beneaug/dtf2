@@ -428,7 +428,7 @@
         }
       }
 
-      function openGangSheetModal(gangSheetData, orderId) {
+      async function openGangSheetModal(gangSheetData, orderId) {
         if (!gangSheetData) return;
 
         try {
@@ -436,7 +436,7 @@
             ? JSON.parse(gangSheetData) 
             : gangSheetData;
 
-          // Create modal overlay
+          // Create modal overlay matching gang builder style
           const modal = document.createElement('div');
           modal.className = 'ops-gang-sheet-modal';
           modal.innerHTML = `
@@ -464,8 +464,8 @@
                     <span class="ops-detail-value">${data.usageStats ? data.usageStats.instanceCount || 0 : '—'}</span>
                   </div>
                 </div>
-                <div class="ops-gang-sheet-canvas-wrapper">
-                  <canvas id="ops-gang-sheet-canvas-${orderId}-${Date.now()}" class="ops-gang-sheet-canvas"></canvas>
+                <div class="gang-builder-center" style="min-height: 500px; height: 70vh;">
+                  <div id="ops-gang-sheet-canvas-container-${orderId}"></div>
                 </div>
               </div>
             </div>
@@ -488,14 +488,107 @@
             }
           });
 
-          // Render canvas
-          const canvas = modal.querySelector('canvas');
-          if (canvas && data.instanceLayout && data.designFiles) {
-            renderGangSheetCanvas(canvas, data, orderId);
+          // Load the actual gang builder canvas component
+          const canvasContainer = modal.querySelector(`#ops-gang-sheet-canvas-container-${orderId}`);
+          if (canvasContainer && data.instanceLayout && data.designFiles) {
+            await loadGangSheetViewer(canvasContainer, data, orderId);
           }
         } catch (err) {
           console.error('Failed to open gang sheet modal:', err);
           alert('Failed to load gang sheet layout.');
+        }
+      }
+
+      async function loadGangSheetViewer(container, data, orderId) {
+        try {
+          // Dynamically import the gang builder components
+          const { create: createCanvas } = await import('./components/gang-builder/sheet-canvas.js');
+          const storeModule = await import('./lib/gang-builder/store.js');
+          
+          // Get order to load images
+          const order = OPS_CURRENT_ORDERS.find(o => Number(o.id) === Number(orderId));
+          const orderFiles = order && Array.isArray(order.files) ? order.files : [];
+          
+          // Load images and create design files with URLs
+          const designFilesWithUrls = await Promise.all(data.designFiles.map(async (file) => {
+            // Find matching file in order
+            const matchingFile = orderFiles.find(f => {
+              const fileName = f.filename || f.name || '';
+              return fileName === file.name || fileName.includes(file.name) || file.name.includes(fileName);
+            });
+            
+            let imageUrl = null;
+            if (matchingFile) {
+              try {
+                const fileIndex = orderFiles.indexOf(matchingFile);
+                const res = await opsFetch(`/api/operator/file?orderId=${orderId}&index=${fileIndex}`);
+                const fileData = await res.json();
+                if (res.ok && fileData.ok && fileData.url) {
+                  imageUrl = fileData.url;
+                }
+              } catch (err) {
+                console.error('Error loading image URL:', err);
+              }
+            }
+            
+            return {
+              id: file.id,
+              name: file.name,
+              url: imageUrl || 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', // 1x1 transparent placeholder
+              naturalWidthPx: file.naturalWidthPx,
+              naturalHeightPx: file.naturalHeightPx,
+              widthIn: file.widthIn,
+              heightIn: file.heightIn,
+            };
+          }));
+          
+          // Initialize store with the gang sheet data
+          storeModule.resetAll();
+          storeModule.setSheetSize(data.sheetSizeId);
+          storeModule.setSheetQuantity(data.quantity);
+          
+          // Add design files
+          designFilesWithUrls.forEach(file => {
+            storeModule.addDesignFile(file);
+          });
+          
+          // Group instances by design, then add them using auto-pack and immediately update positions
+          const instancesByDesign = {};
+          data.instanceLayout.forEach(inst => {
+            if (!instancesByDesign[inst.designId]) {
+              instancesByDesign[inst.designId] = [];
+            }
+            instancesByDesign[inst.designId].push(inst);
+          });
+          
+          // For each design, create instances then immediately update to saved positions
+          for (const [designId, savedInstances] of Object.entries(instancesByDesign)) {
+            // Create instances using auto-pack (they'll be at wrong positions initially)
+            storeModule.addInstancesForDesign(designId, savedInstances.length, true);
+            
+            // Get the instances we just created and update them to match saved layout
+            const currentState = storeModule.getState();
+            const createdInstances = currentState.instances.filter(i => i.designId === designId);
+            
+            // Update each instance to match saved position
+            savedInstances.forEach((savedInst, index) => {
+              if (createdInstances[index]) {
+                storeModule.updateInstance(createdInstances[index].id, {
+                  xIn: savedInst.xIn,
+                  yIn: savedInst.yIn,
+                  widthIn: savedInst.widthIn,
+                  heightIn: savedInst.heightIn,
+                  rotationDeg: savedInst.rotationDeg || 0,
+                });
+              }
+            });
+          }
+          
+          // Create the canvas component (read-only viewer)
+          createCanvas(container);
+        } catch (err) {
+          console.error('Failed to load gang sheet viewer:', err);
+          container.innerHTML = '<p class="ops-detail-notes-body">Failed to load gang sheet viewer. Check console for details.</p>';
         }
       }
 

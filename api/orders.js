@@ -112,30 +112,48 @@ module.exports = (req, res) => {
 
       // Create order record BEFORE Stripe checkout with all data including gang_sheet_data
       // This ensures the data is saved immediately
-      if (pool) {
+      // Use a hash of files array as a unique identifier to prevent duplicates
+      if (pool && gangSheetData) {
         try {
           const client = await pool.connect();
           try {
-            // Create order with temporary session_id, will be updated in webhook
-            const tempSessionId = `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-            const hasGangSheetData = gangSheetData !== null;
+            // Create a unique hash from files array to identify this order
+            const filesHash = crypto.createHash('md5')
+              .update(JSON.stringify(uploadedFiles.map(f => f.filename || f.key)))
+              .digest('hex')
+              .substring(0, 12);
             
-            console.log("Creating order record before checkout. Has gang_sheet_data:", hasGangSheetData);
+            const tempSessionId = `pending-${filesHash}-${Date.now()}`;
             
-            const insertQuery = hasGangSheetData
-              ? `INSERT INTO dtf_orders
+            console.log("Creating order record before checkout. Has gang_sheet_data: YES");
+            console.log("  Files hash:", filesHash);
+            console.log("  Temp session_id:", tempSessionId);
+            
+            // Check if order with this files hash already exists (within last 5 minutes)
+            const existingCheck = await client.query(
+              `SELECT id, gang_sheet_data, stripe_session_id 
+               FROM dtf_orders 
+               WHERE stripe_session_id LIKE $1
+                 AND created_at > NOW() - INTERVAL '5 minutes'
+               ORDER BY created_at DESC
+               LIMIT 1`,
+              [`pending-${filesHash}-%`]
+            );
+            
+            if (existingCheck.rows.length > 0) {
+              // Use existing order
+              tempOrderId = existingCheck.rows[0].id;
+              console.log("✓ Found existing order with same files hash:", tempOrderId);
+              console.log("  Will update this order in webhook");
+            } else {
+              // Create new order
+              const insertResult = await client.query(
+                `INSERT INTO dtf_orders
                    (mode, size, quantity, transfer_name, garment_color, notes,
                     files, unit_price_cents, total_price_cents, stripe_session_id, status, gang_sheet_data)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11::jsonb)
-                 RETURNING id, gang_sheet_data`
-              : `INSERT INTO dtf_orders
-                   (mode, size, quantity, transfer_name, garment_color, notes,
-                    files, unit_price_cents, total_price_cents, stripe_session_id, status)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending')
-                 RETURNING id`;
-            
-            const insertParams = hasGangSheetData
-              ? [
+                 RETURNING id, gang_sheet_data`,
+                [
                   mode,
                   size,
                   quantity,
@@ -148,26 +166,12 @@ module.exports = (req, res) => {
                   tempSessionId,
                   gangSheetData,
                 ]
-              : [
-                  mode,
-                  size,
-                  quantity,
-                  transferName,
-                  garmentColor,
-                  notes,
-                  JSON.stringify(uploadedFiles),
-                  unitPriceCents,
-                  totalPriceCents,
-                  tempSessionId,
-                ];
-            
-            const insertResult = await client.query(insertQuery, insertParams);
-            
-            if (insertResult.rows.length > 0) {
-              tempOrderId = insertResult.rows[0].id;
-              const savedGangSheetData = hasGangSheetData ? insertResult.rows[0].gang_sheet_data : null;
-              console.log("✓ Created order record ID:", tempOrderId, "with temp session_id:", tempSessionId);
-              if (hasGangSheetData) {
+              );
+              
+              if (insertResult.rows.length > 0) {
+                tempOrderId = insertResult.rows[0].id;
+                const savedGangSheetData = insertResult.rows[0].gang_sheet_data;
+                console.log("✓ Created order record ID:", tempOrderId, "with temp session_id:", tempSessionId);
                 console.log("  gang_sheet_data saved:", savedGangSheetData ? "YES" : "NO - NULL!");
                 if (!savedGangSheetData) {
                   console.error("ERROR: gang_sheet_data was not saved!");
