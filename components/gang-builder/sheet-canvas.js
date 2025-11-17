@@ -137,20 +137,23 @@ export function create(container) {
       const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
       
       // Calculate scale based on FIXED container size (not canvas)
-      // Use Math.min to maintain aspect ratio - this prevents warping
+      // CRITICAL: Use Math.min to maintain aspect ratio - this prevents warping
+      // Both width and height MUST use the same scale to preserve proportions
       const fitScaleX = (containerW * 0.95) / baseSheetWidthPx;
       const fitScaleY = (containerH * 0.95) / baseSheetHeightPx;
       const baseScale = Math.min(fitScaleX, fitScaleY); // Always use min to maintain aspect ratio
       const scale = baseScale * zoomLevel;
       
       // Store scale for render function to use consistently
+      // This ensures width and height always use the SAME scale factor
       currentScale = scale;
       
       const sheetWidthPx = baseSheetWidthPx * scale;
       const sheetHeightPx = baseSheetHeightPx * scale;
       
       // Canvas can be larger than container for scrolling, but calculate based on sheet
-      const paddingPx = 32;
+      // Use same padding as render function (16px) for consistency
+      const paddingPx = 16;
       const canvasW = Math.max(containerW, sheetWidthPx + paddingPx * 2);
       const canvasH = Math.max(containerH, sheetHeightPx + paddingPx * 2);
       
@@ -195,17 +198,18 @@ export function create(container) {
     const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
     
     // Use the stored scale from resizeCanvas to ensure consistency
-    // This prevents warping by using the exact same scale calculation
+    // CRITICAL: Use the SAME scale for both width and height to maintain aspect ratio
     const scale = currentScale;
 
+    // Apply the SAME scale to both dimensions - this prevents warping
     const sheetWidthPx = baseSheetWidthPx * scale;
     const sheetHeightPx = baseSheetHeightPx * scale;
     
-    // Position sheet - always top-aligned so top is visible, center horizontally
-    const paddingPx = 32; // 2rem = 32px
+    // Position sheet - start at very top (minimal padding) so top is always visible
+    const paddingPx = 16; // Reduced padding so top is more visible
     // Center horizontally
     const offsetX = Math.max(paddingPx, (canvasWidth - sheetWidthPx) / 2);
-    // ALWAYS top-align vertically so the top of the sheet is visible and scrollable
+    // ALWAYS start at top with minimal padding so the top of the sheet is visible
     const offsetY = paddingPx;
 
     // Draw grid (subtle)
@@ -547,8 +551,12 @@ export function create(container) {
     // Resize canvas to accommodate new zoom level
     resizeCanvas();
     
-    // Reposition controls after resize (they should stay fixed)
+    // Ensure scroll position stays at top when zooming
     requestAnimationFrame(() => {
+      if (canvasWrapper) {
+        canvasWrapper.scrollTop = 0;
+        canvasWrapper.scrollLeft = 0;
+      }
       positionZoomControls();
       isZooming = false;
     });
@@ -597,6 +605,11 @@ export function create(container) {
       requestAnimationFrame(() => {
         resizeCanvas(); // This will get fresh wrapper dimensions and reset container to fixed size
         positionZoomControls();
+        // Force scroll to top immediately and after render completes
+        if (canvasWrapper) {
+          canvasWrapper.scrollTop = 0;
+          canvasWrapper.scrollLeft = 0;
+        }
         requestAnimationFrame(() => {
           if (canvasWrapper) {
             canvasWrapper.scrollTop = 0;
