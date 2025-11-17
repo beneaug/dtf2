@@ -95,13 +95,22 @@ export function create(container) {
     const baseSheetWidthPx = convertInchesToPixels(sheetSize.widthIn);
     const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
     
-    // Calculate scale to zoom in - use 1.5x to make it larger (may overflow but gives closer view)
-    const zoomFactor = 1.5;
+    // Calculate scale to zoom in - use larger factor but ensure it fits
+    const zoomFactor = 1.8;
     const scaleX = (displayWidth * zoomFactor) / baseSheetWidthPx;
     const scaleY = (displayHeight * zoomFactor) / baseSheetHeightPx;
     
-    // Use the smaller scale to ensure reasonable fit
-    const scale = Math.min(scaleX, scaleY);
+    // Use the smaller scale to ensure it fits both dimensions (prevents cutoff)
+    let scale = Math.min(scaleX, scaleY);
+    
+    // Double-check: if scaled size exceeds canvas, cap it at 98% to prevent cutoff
+    const finalWidth = baseSheetWidthPx * scale;
+    const finalHeight = baseSheetHeightPx * scale;
+    if (finalWidth > displayWidth * 0.98 || finalHeight > displayHeight * 0.98) {
+      const maxScaleX = (displayWidth * 0.98) / baseSheetWidthPx;
+      const maxScaleY = (displayHeight * 0.98) / baseSheetHeightPx;
+      scale = Math.min(maxScaleX, maxScaleY);
+    }
 
     const sheetWidthPx = baseSheetWidthPx * scale;
     const sheetHeightPx = baseSheetHeightPx * scale;
