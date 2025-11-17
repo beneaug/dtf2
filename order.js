@@ -256,7 +256,9 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
           </div>
           <div class="dtf-transfer" aria-hidden="true">
-            <div class="dtf-transfer-sheet"></div>
+            <div class="dtf-transfer-cover"></div>
+            <div class="dtf-transfer-ridge"></div>
+            <div class="dtf-transfer-shadow"></div>
             <div class="dtf-transfer-peel"></div>
           </div>
         </div>
