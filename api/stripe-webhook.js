@@ -85,8 +85,9 @@ module.exports = (req, res) => {
       
       console.log("Metadata tempOrderId:", m.tempOrderId, "parsed:", tempOrderId);
       
+      // Try to find existing order by tempOrderId first
       if (tempOrderId) {
-        console.log("Found temp order ID:", tempOrderId, "- will update existing order");
+        console.log("Looking for order by tempOrderId:", tempOrderId);
         try {
           const checkClient = await pool.connect();
           try {
@@ -97,7 +98,7 @@ module.exports = (req, res) => {
             if (checkResult.rows.length > 0) {
               existingOrder = checkResult.rows[0];
               const hasGangSheetData = existingOrder.gang_sheet_data !== null;
-              console.log("✓ Found existing order ID:", existingOrder.id);
+              console.log("✓ Found existing order by ID:", existingOrder.id);
               console.log("  Created at:", existingOrder.created_at);
               console.log("  Current session_id:", existingOrder.stripe_session_id);
               console.log("  Has gang_sheet_data:", hasGangSheetData);
@@ -108,8 +109,7 @@ module.exports = (req, res) => {
                 console.error("WARNING: Existing order has NULL gang_sheet_data!");
               }
             } else {
-              console.error("ERROR: Temp order not found with ID:", tempOrderId);
-              console.error("  This means the order was not created before checkout, or ID is wrong");
+              console.error("Order not found by tempOrderId:", tempOrderId);
             }
           } finally {
             checkClient.release();
@@ -118,8 +118,44 @@ module.exports = (req, res) => {
           console.error("Failed to check for existing order:", dbErr);
           console.error("Error details:", dbErr.message);
         }
-      } else {
-        console.log("No tempOrderId in metadata - this is a regular order (not gang-sheet)");
+      }
+      
+      // Fallback: Look for pending orders with gang_sheet_data that match this checkout
+      // This handles cases where tempOrderId wasn't passed or order wasn't found
+      if (!existingOrder) {
+        console.log("No order found by tempOrderId, searching for pending orders with gang_sheet_data");
+        try {
+          const checkClient = await pool.connect();
+          try {
+            // Find most recent pending order with gang_sheet_data (created in last 10 minutes)
+            const checkResult = await checkClient.query(
+              `SELECT id, gang_sheet_data, stripe_session_id, created_at 
+               FROM dtf_orders 
+               WHERE stripe_session_id LIKE 'pending-%' 
+                 AND gang_sheet_data IS NOT NULL
+                 AND created_at > NOW() - INTERVAL '10 minutes'
+               ORDER BY created_at DESC
+               LIMIT 1`,
+              []
+            );
+            if (checkResult.rows.length > 0) {
+              existingOrder = checkResult.rows[0];
+              console.log("✓ Found pending order with gang_sheet_data:", existingOrder.id);
+              console.log("  Created at:", existingOrder.created_at);
+              console.log("  Session_id:", existingOrder.stripe_session_id);
+            } else {
+              console.log("No pending orders with gang_sheet_data found");
+            }
+          } finally {
+            checkClient.release();
+          }
+        } catch (dbErr) {
+          console.error("Failed to search for pending orders:", dbErr);
+        }
+      }
+      
+      if (!existingOrder) {
+        console.log("No existing order found - will create new one (regular order, not gang-sheet)");
       }
 
       // Extract shipping address from session

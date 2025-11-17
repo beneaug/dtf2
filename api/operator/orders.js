@@ -58,7 +58,8 @@ async function handleGet(req, res) {
          unit_price_cents,
          total_price_cents,
          stripe_session_id,
-         shipping_address
+         shipping_address,
+         gang_sheet_data
        FROM dtf_orders
        ORDER BY created_at DESC
        LIMIT 100`

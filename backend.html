@@ -331,6 +331,15 @@
             </p>
           </section>
 
+          ${
+            order.gang_sheet_data
+              ? `<section class="ops-detail-notes">
+                  <h4 class="ops-detail-section-heading">Gang Sheet Layout</h4>
+                  <div id="ops-gang-sheet-viewer-${order.id}" class="ops-gang-sheet-viewer"></div>
+                </section>`
+              : ""
+          }
+
           <section class="ops-detail-notes">
             <h4 class="ops-detail-section-heading">Operator notes</h4>
             <p class="ops-detail-notes-body">
@@ -399,6 +408,130 @@
         if (artContainer) {
           loadThumbnail(order, artContainer, "large");
         }
+
+        // Load gang sheet viewer if data exists
+        if (order.gang_sheet_data) {
+          const viewerContainer = document.getElementById(
+            `ops-gang-sheet-viewer-${order.id}`
+          );
+          if (viewerContainer) {
+            renderGangSheetViewer(order.gang_sheet_data, viewerContainer);
+          }
+        }
+      }
+
+      function renderGangSheetViewer(gangSheetData, container) {
+        if (!gangSheetData || !container) return;
+
+        try {
+          const data = typeof gangSheetData === 'string' 
+            ? JSON.parse(gangSheetData) 
+            : gangSheetData;
+
+          container.innerHTML = `
+            <div class="ops-gang-sheet-info">
+              <div class="ops-gang-sheet-info-item">
+                <span class="ops-detail-label">Sheet Size</span>
+                <span class="ops-detail-value">${data.sheetSizeId || '—'}</span>
+              </div>
+              <div class="ops-gang-sheet-info-item">
+                <span class="ops-detail-label">Quantity</span>
+                <span class="ops-detail-value">${data.quantity || '—'}</span>
+              </div>
+              <div class="ops-gang-sheet-info-item">
+                <span class="ops-detail-label">Usage</span>
+                <span class="ops-detail-value">${data.usageStats ? Math.round(data.usageStats.usagePct || 0) + '%' : '—'}</span>
+              </div>
+              <div class="ops-gang-sheet-info-item">
+                <span class="ops-detail-label">Instances</span>
+                <span class="ops-detail-value">${data.usageStats ? data.usageStats.instanceCount || 0 : '—'}</span>
+              </div>
+            </div>
+            <div class="ops-gang-sheet-canvas-container">
+              <canvas id="ops-gang-sheet-canvas-${Date.now()}" class="ops-gang-sheet-canvas"></canvas>
+            </div>
+          `;
+
+          // Render the gang sheet on canvas
+          const canvas = container.querySelector('canvas');
+          if (canvas && data.instanceLayout && data.designFiles) {
+            renderGangSheetCanvas(canvas, data);
+          }
+        } catch (err) {
+          console.error('Failed to render gang sheet viewer:', err);
+          container.innerHTML = '<p class="ops-detail-notes-body">Failed to load gang sheet layout.</p>';
+        }
+      }
+
+      function renderGangSheetCanvas(canvas, data) {
+        if (!canvas || !data.instanceLayout || !data.designFiles) return;
+
+        const ctx = canvas.getContext('2d');
+        const PX_PER_INCH = 50; // Scale for display
+        
+        // Get sheet size
+        const sheetSizes = {
+          '22x12': { width: 22, height: 12 },
+          '22x24': { width: 22, height: 24 },
+          '22x60': { width: 22, height: 60 },
+          '22x120': { width: 22, height: 120 },
+          '22x180': { width: 22, height: 180 },
+        };
+        
+        const sheetSize = sheetSizes[data.sheetSizeId] || sheetSizes['22x12'];
+        const sheetWidthPx = sheetSize.width * PX_PER_INCH;
+        const sheetHeightPx = sheetSize.height * PX_PER_INCH;
+        
+        // Set canvas size
+        canvas.width = sheetWidthPx;
+        canvas.height = sheetHeightPx;
+        
+        // Draw sheet background
+        ctx.fillStyle = '#f0f0f0';
+        ctx.fillRect(0, 0, sheetWidthPx, sheetHeightPx);
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(0, 0, sheetWidthPx, sheetHeightPx);
+        
+        // Create design file map
+        const designMap = new Map();
+        data.designFiles.forEach(file => {
+          designMap.set(file.id, file);
+        });
+        
+        // Draw each instance
+        data.instanceLayout.forEach(instance => {
+          const design = designMap.get(instance.designId);
+          if (!design) return;
+          
+          const x = instance.xIn * PX_PER_INCH;
+          const y = instance.yIn * PX_PER_INCH;
+          const width = instance.widthIn * PX_PER_INCH;
+          const height = instance.heightIn * PX_PER_INCH;
+          
+          // Draw bounding box
+          ctx.strokeStyle = '#0066cc';
+          ctx.lineWidth = 1;
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          
+          if (instance.rotationDeg) {
+            const centerX = x + width / 2;
+            const centerY = y + height / 2;
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate((instance.rotationDeg * Math.PI) / 180);
+            ctx.strokeRect(-width / 2, -height / 2, width, height);
+            ctx.restore();
+          } else {
+            ctx.strokeRect(x, y, width, height);
+          }
+          
+          // Draw label
+          ctx.fillStyle = '#0066cc';
+          ctx.font = '10px sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText(design.name || 'Design', x + 2, y + 12);
+        });
       }
 
       function renderOrderList(orders) {
@@ -634,6 +767,42 @@
         loadOrders();
       });
     </script>
+    <style>
+      .ops-gang-sheet-viewer {
+        margin-top: 1rem;
+      }
+      
+      .ops-gang-sheet-info {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1rem;
+        padding: 1rem;
+        background: #f9f9f9;
+        border-radius: 4px;
+      }
+      
+      .ops-gang-sheet-info-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+      
+      .ops-gang-sheet-canvas-container {
+        width: 100%;
+        overflow: auto;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background: #fff;
+        padding: 1rem;
+      }
+      
+      .ops-gang-sheet-canvas {
+        display: block;
+        max-width: 100%;
+        height: auto;
+      }
+    </style>
   </body>
 </html>
 
