@@ -414,8 +414,9 @@ body {
     calc(var(--dtf-art-width, 180px) * 0.12),
     44px
   );
-  --dtf-peel-depth: calc(var(--dtf-peel-max) * var(--dtf-peel-progress));
-  --dtf-peel-cut: calc(100% - var(--dtf-peel-depth));
+  --dtf-peel-distance: calc(var(--dtf-peel-max) * var(--dtf-peel-progress));
+  --dtf-peel-percent: calc(var(--dtf-peel-progress) * 100%);
+  --dtf-peel-cut-percent: calc(100% - var(--dtf-peel-percent));
   width: var(--dtf-sheet-width);
   height: var(--dtf-sheet-height);
   position: relative;
@@ -505,25 +506,25 @@ body {
   border-radius: inherit;
   background: linear-gradient(
       120deg,
-      rgba(255, 255, 255, 0.45),
-      rgba(255, 255, 255, 0.08)
+      rgba(255, 255, 255, 0.32),
+      rgba(255, 255, 255, 0.06)
     ),
-    rgba(229, 232, 240, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  box-shadow: inset 0 18px 32px rgba(255, 255, 255, 0.12),
-    inset 0 -18px 24px rgba(19, 22, 33, 0.25),
-    0 10px 28px rgba(0, 0, 0, 0.55);
+    rgba(213, 218, 232, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: inset 0 18px 32px rgba(255, 255, 255, 0.1),
+    inset 0 -18px 24px rgba(19, 22, 33, 0.22),
+    0 12px 26px rgba(0, 0, 0, 0.42);
   clip-path: polygon(
     0 0,
-    var(--dtf-peel-cut) 0,
-    100% var(--dtf-peel-depth),
+    var(--dtf-peel-cut-percent) 0,
+    100% var(--dtf-peel-percent),
     100% 100%,
     0 100%
   );
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
   mix-blend-mode: screen;
-  opacity: 0.95;
+  opacity: calc(0.45 + (1 - var(--dtf-peel-progress)) * 0.3);
   transition: clip-path 700ms cubic-bezier(0.22, 0.61, 0.36, 1),
     opacity 220ms ease;
 }
@@ -547,10 +548,10 @@ body {
   inset: 0;
   border-radius: inherit;
   clip-path: polygon(
-    calc(var(--dtf-peel-cut) - 2px) -2px,
-    calc(var(--dtf-peel-cut) + 2px) -2px,
-    calc(100% + 2px) calc(var(--dtf-peel-depth) + 2px),
-    calc(100% - 2px) calc(var(--dtf-peel-depth) - 2px)
+    calc(var(--dtf-peel-cut-percent) - 1.4%) -1%,
+    calc(var(--dtf-peel-cut-percent) + 0.8%) -1%,
+    101% calc(var(--dtf-peel-percent) + 1.5%),
+    99% calc(var(--dtf-peel-percent) - 0.5%)
   );
   background: linear-gradient(
     135deg,
@@ -566,14 +567,18 @@ body {
   inset: 0;
   border-radius: inherit;
   clip-path: polygon(
-    var(--dtf-peel-cut) 0,
+    var(--dtf-peel-cut-percent) 0,
     100% 0,
-    100% var(--dtf-peel-depth)
+    100% var(--dtf-peel-percent)
   );
-  background: rgba(0, 0, 0, 0.55);
-  filter: blur(18px);
-  transform: translate3d(18px, 28px, -5px);
-  opacity: calc(var(--dtf-peel-progress) * 0.65);
+  background: rgba(4, 5, 7, 0.65);
+  filter: blur(16px) saturate(0.9);
+  transform: translate3d(
+    calc(10px + var(--dtf-peel-distance) * 0.12),
+    calc(18px + var(--dtf-peel-distance) * 0.18),
+    -5px
+  );
+  opacity: calc(var(--dtf-peel-progress) * 0.6);
   transition: opacity 300ms ease, filter 300ms ease;
 }
 
@@ -582,21 +587,21 @@ body {
   inset: 0;
   border-radius: inherit;
   clip-path: polygon(
-    var(--dtf-peel-cut) 0,
+    var(--dtf-peel-cut-percent) 0,
     100% 0,
-    100% var(--dtf-peel-depth)
+    100% var(--dtf-peel-percent)
   );
   transform-origin: 100% 0;
   transform-style: preserve-3d;
   filter: url(#dtfDropShadow);
   opacity: clamp(0, var(--dtf-peel-progress) * 1.6, 1);
-  transform: rotateX(calc(22deg + 60deg * var(--dtf-peel-progress)))
-    rotateY(calc(-6deg - 24deg * var(--dtf-peel-progress)))
-    rotateZ(calc(-10deg * var(--dtf-peel-progress)))
+  transform: rotateX(calc(18deg + 58deg * var(--dtf-peel-progress)))
+    rotateY(calc(-4deg - 22deg * var(--dtf-peel-progress)))
+    rotateZ(calc(-8deg * var(--dtf-peel-progress)))
     translate3d(
-      calc(2px + 12px * var(--dtf-peel-progress)),
-      calc(-4px - 10px * var(--dtf-peel-progress)),
-      calc(12px + 36px * var(--dtf-peel-progress))
+      calc(4px + var(--dtf-peel-distance) * 0.16),
+      calc(-6px - var(--dtf-peel-distance) * 0.2),
+      calc(14px + var(--dtf-peel-distance) * 0.28)
     );
   transition: clip-path 700ms cubic-bezier(0.22, 0.61, 0.36, 1),
     transform 880ms cubic-bezier(0.22, 0.61, 0.36, 1),
