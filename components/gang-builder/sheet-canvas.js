@@ -117,8 +117,23 @@ export function create(container) {
 
     const sheetWidthPx = baseSheetWidthPx * scale;
     const sheetHeightPx = baseSheetHeightPx * scale;
-    const offsetX = (displayWidth - sheetWidthPx) / 2;
-    const offsetY = (displayHeight - sheetHeightPx) / 2;
+    
+    // Center the sheet, but allow it to extend beyond canvas if needed
+    const offsetX = Math.max(0, (displayWidth - sheetWidthPx) / 2);
+    const offsetY = Math.max(0, (displayHeight - sheetHeightPx) / 2);
+    
+    // Resize canvas to fit the sheet if it's larger than display
+    const neededCanvasWidth = Math.max(displayWidth, sheetWidthPx + offsetX * 2);
+    const neededCanvasHeight = Math.max(displayHeight, sheetHeightPx + offsetY * 2);
+    
+    // Update canvas size if needed (but keep DPR scaling)
+    if (canvas.width / dpr !== neededCanvasWidth || canvas.height / dpr !== neededCanvasHeight) {
+      canvas.width = neededCanvasWidth * dpr;
+      canvas.height = neededCanvasHeight * dpr;
+      canvas.style.width = neededCanvasWidth + 'px';
+      canvas.style.height = neededCanvasHeight + 'px';
+      ctx.scale(dpr, dpr);
+    }
 
     // Draw grid (subtle)
     if (state.snapIncrement > 0) {
