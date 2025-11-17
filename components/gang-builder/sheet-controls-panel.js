@@ -429,17 +429,8 @@ function updateDesignsList(container, designFiles, onSelectDesign) {
       if (onSelectDesign) onSelectDesign(design.id);
     });
     
-    useBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      // Verify design still exists before adding
-      const currentState = store.getState();
-      const currentDesign = currentState.designFiles.find((d) => d.id === design.id);
-      if (currentDesign) {
-        store.addInstancesForDesign(design.id, 1, false);
-      } else {
-        console.warn(`Design ${design.id} no longer exists`);
-      }
+    useBtn.addEventListener("click", () => {
+      store.addInstancesForDesign(design.id, 1, false);
     });
     
     removeBtn.addEventListener("click", () => {
