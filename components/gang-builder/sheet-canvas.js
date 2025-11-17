@@ -181,18 +181,29 @@ export function create(container) {
       const deadspaceIn = 0.157; // 4mm in inches
       const deadspacePx = convertInchesToPixels(deadspaceIn) * scale;
       
-      // Get base dimensions
-      let baseWidth = convertInchesToPixels(instance.widthIn) * scale;
-      let baseHeight = convertInchesToPixels(instance.heightIn) * scale;
+      // Get base dimensions in pixels
+      const baseWidthPx = convertInchesToPixels(instance.widthIn) * scale;
+      const baseHeightPx = convertInchesToPixels(instance.heightIn) * scale;
       
       // When rotated 90 degrees, swap width and height for the bounding box
       const isRotated = instance.rotationDeg === 90;
-      const boxWidth = (isRotated ? baseHeight : baseWidth) + (deadspacePx * 2);
-      const boxHeight = (isRotated ? baseWidth : baseHeight) + (deadspacePx * 2);
+      const boxWidthPx = (isRotated ? baseHeightPx : baseWidthPx) + (deadspacePx * 2);
+      const boxHeightPx = (isRotated ? baseWidthPx : baseHeightPx) + (deadspacePx * 2);
       
-      // Calculate center point (instance position is top-left of the graphic)
-      const centerX = offsetX + convertInchesToPixels(instance.xIn) * scale + baseWidth / 2;
-      const centerY = offsetY + convertInchesToPixels(instance.yIn) * scale + baseHeight / 2;
+      // Calculate center point of the bounding box
+      // For non-rotated: center is at xIn + width/2, yIn + height/2
+      // For rotated: the bounding box is swapped, so center calculation needs to account for that
+      let centerX, centerY;
+      if (isRotated) {
+        // For rotated instances, xIn/yIn is the top-left of the original graphic
+        // The bounding box center is at: xIn + height/2, yIn + width/2 (swapped)
+        centerX = offsetX + convertInchesToPixels(instance.xIn) * scale + baseHeightPx / 2;
+        centerY = offsetY + convertInchesToPixels(instance.yIn) * scale + baseWidthPx / 2;
+      } else {
+        // For non-rotated, center is straightforward
+        centerX = offsetX + convertInchesToPixels(instance.xIn) * scale + baseWidthPx / 2;
+        centerY = offsetY + convertInchesToPixels(instance.yIn) * scale + baseHeightPx / 2;
+      }
 
       const isSelected = instance.id === state.selectedInstanceId;
 
@@ -205,19 +216,19 @@ export function create(container) {
       
       // Draw instance background (with deadspace) - centered at origin after translation
       ctx.fillStyle = isSelected ? "rgba(255, 255, 255, 0.15)" : "rgba(255, 255, 255, 0.08)";
-      ctx.fillRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight);
+      ctx.fillRect(-boxWidthPx / 2, -boxHeightPx / 2, boxWidthPx, boxHeightPx);
 
       // Draw instance border (with deadspace)
       ctx.strokeStyle = isSelected ? "rgba(255, 255, 255, 0.6)" : "rgba(255, 255, 255, 0.3)";
       ctx.lineWidth = isSelected ? 2 : 1;
-      ctx.strokeRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight);
+      ctx.strokeRect(-boxWidthPx / 2, -boxHeightPx / 2, boxWidthPx, boxHeightPx);
 
       // Draw design image - centered at origin
       if (design.url) {
         const cachedImg = imageCache.get(design.url);
         if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
-          // Draw image centered (no additional rotation needed, already rotated)
-          ctx.drawImage(cachedImg, -baseWidth / 2, -baseHeight / 2, baseWidth, baseHeight);
+          // Draw image centered (rotation is already applied to context)
+          ctx.drawImage(cachedImg, -baseWidthPx / 2, -baseHeightPx / 2, baseWidthPx, baseHeightPx);
         } else {
           // Preload the image if not cached
           preloadImage(design.url)
@@ -228,7 +239,7 @@ export function create(container) {
             .catch(() => {
               // Draw placeholder if image fails to load
               ctx.fillStyle = "rgba(100, 100, 100, 0.3)";
-              ctx.fillRect(-baseWidth / 2, -baseHeight / 2, baseWidth, baseHeight);
+              ctx.fillRect(-baseWidthPx / 2, -baseHeightPx / 2, baseWidthPx, baseHeightPx);
               render();
             });
         }
