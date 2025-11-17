@@ -66,8 +66,10 @@ module.exports = (req, res) => {
         m.totalPriceCents != null ? parseInt(m.totalPriceCents, 10) : null;
 
       // Extract shipping address from session
-      // Retrieve full session to ensure we have shipping details
+      // Always retrieve full session to ensure we have shipping details
+      // Webhook events may not include shipping_details by default
       let shippingAddress = null;
+      
       try {
         const fullSession = await stripe.checkout.sessions.retrieve(session.id, {
           expand: ['customer_details', 'shipping_details'],
@@ -84,19 +86,57 @@ module.exports = (req, res) => {
             postal_code: addr.postal_code || null,
             country: addr.country || null,
           };
+          console.log("Shipping address retrieved from session:", shippingAddress);
+        } else {
+          // Also check if it's in the webhook event object
+          if (session.shipping_details && session.shipping_details.address) {
+            const addr = session.shipping_details.address;
+            shippingAddress = {
+              name: session.shipping_details.name || null,
+              line1: addr.line1 || null,
+              line2: addr.line2 || null,
+              city: addr.city || null,
+              state: addr.state || null,
+              postal_code: addr.postal_code || null,
+              country: addr.country || null,
+            };
+            console.log("Shipping address found in webhook event:", shippingAddress);
+          } else {
+            console.log("No shipping details found in session:", session.id);
+            console.log("Full session shipping_details:", fullSession.shipping_details);
+            console.log("Webhook session shipping_details:", session.shipping_details);
+          }
         }
       } catch (err) {
         console.error("Failed to retrieve full session for shipping address:", err);
+        // Fallback: check if shipping_details is in the webhook event
+        if (session.shipping_details && session.shipping_details.address) {
+          const addr = session.shipping_details.address;
+          shippingAddress = {
+            name: session.shipping_details.name || null,
+            line1: addr.line1 || null,
+            line2: addr.line2 || null,
+            city: addr.city || null,
+            state: addr.state || null,
+            postal_code: addr.postal_code || null,
+            country: addr.country || null,
+          };
+          console.log("Shipping address found in webhook event (fallback):", shippingAddress);
+        }
       }
 
       const client = await pool.connect();
       try {
+        const shippingAddressJson = shippingAddress ? JSON.stringify(shippingAddress) : null;
+        console.log("Attempting to insert order with shipping_address:", shippingAddressJson ? "present" : "null");
+        
         const result = await client.query(
           `INSERT INTO dtf_orders
              (mode, size, quantity, transfer_name, garment_color, notes,
               files, unit_price_cents, total_price_cents, stripe_session_id, status, shipping_address)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11)
-           ON CONFLICT (stripe_session_id) DO NOTHING
+           ON CONFLICT (stripe_session_id) 
+           DO UPDATE SET shipping_address = COALESCE(EXCLUDED.shipping_address, dtf_orders.shipping_address)
            RETURNING id`,
           [
             m.mode || "single-image",
@@ -109,18 +149,27 @@ module.exports = (req, res) => {
             unitPriceCents,
             totalPriceCents,
             session.id,
-            shippingAddress ? JSON.stringify(shippingAddress) : null,
+            shippingAddressJson,
           ]
         );
 
         if (result.rowCount) {
           console.log(
-            "Inserted dtf_orders row for Stripe session",
-            session.id
+            "Inserted/updated dtf_orders row for Stripe session",
+            session.id,
+            "with shipping_address:",
+            shippingAddressJson ? "yes" : "no"
           );
+        } else {
+          console.log("No row affected for session:", session.id);
         }
       } catch (err) {
         console.error("Failed to insert dtf_orders row from Stripe webhook:", err);
+        console.error("Error details:", err.message);
+        // Check if it's a column error
+        if (err.message && err.message.includes("shipping_address")) {
+          console.error("ERROR: The shipping_address column may not exist in the database. Please run: ALTER TABLE dtf_orders ADD COLUMN shipping_address JSONB;");
+        }
       } finally {
         client.release();
       }
