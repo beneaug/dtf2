@@ -356,6 +356,7 @@ export function create(container) {
         
         // Calculate max instances using the auto-pack algorithm
         // Use a very large quantity to find the actual maximum
+        // Pass empty existing areas since we're calculating max for this design only
         const result = autoPackDesign({
           sheetWidthIn: sheetSize.widthIn,
           sheetHeightIn: sheetSize.heightIn,
@@ -363,6 +364,7 @@ export function create(container) {
           designHeightIn,
           quantity: 10000, // Use very large number to get actual max
           tryRotated: true,
+          existingOccupiedAreas: [], // Empty for max calculation
         });
         
         // The maxInstances returned is the actual maximum that can fit
