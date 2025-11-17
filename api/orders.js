@@ -85,27 +85,11 @@ module.exports = (req, res) => {
       const garmentColor = fields.garmentColor || null;
       const notes = fields.notes || null;
       
-      // Extract gang sheet data if present
-      let gangSheetData = null;
-      let tempOrderId = null;
-      if (fields.gangSheetData) {
-        try {
-          const parsed = typeof fields.gangSheetData === 'string' 
-            ? JSON.parse(fields.gangSheetData) 
-            : fields.gangSheetData;
-          gangSheetData = parsed;
-          console.log("Parsed gang sheet data, size:", JSON.stringify(gangSheetData).length, "chars");
-          console.log("  Has sheetSizeId:", !!gangSheetData.sheetSizeId);
-          console.log("  Has instanceLayout:", !!gangSheetData.instanceLayout);
-          console.log("  Instance count:", gangSheetData.instanceLayout?.length || 0);
-        } catch (e) {
-          console.error("Failed to parse gangSheetData:", e);
-          console.error("  Raw value:", fields.gangSheetData);
-        }
-      } else {
-        console.log("No gangSheetData field found in form data");
-        console.log("  Available fields:", Object.keys(fields));
-      }
+      // NOTE: Gang sheet data is NOT sent here anymore
+      // It will be sent after successful checkout via /api/update-order-after-checkout
+      // This prevents data loss and simplifies the flow
+      console.log("Order submission - mode:", mode);
+      console.log("  Gang sheet data will be sent after checkout success");
 
       const unitPrice = fields.unitPrice ? parseFloat(fields.unitPrice) : null;
       const totalPrice = fields.totalPrice
@@ -120,105 +104,17 @@ module.exports = (req, res) => {
           ? Math.round(totalPrice * 100)
           : null;
 
-      // STEP 1: Create order record BEFORE Stripe checkout
-      // This ensures all data (including gang_sheet_data) is saved immediately
-      // Simple approach: Always create new order, use order ID as identifier
-      if (pool) {
-        try {
-          const client = await pool.connect();
-          try {
-            // Generate temporary session ID (will be replaced by real Stripe session ID in webhook)
-            const tempSessionId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-            
-            console.log("Creating order record before checkout");
-            console.log("  Mode:", mode);
-            console.log("  Has gang_sheet_data:", !!gangSheetData);
-            if (gangSheetData) {
-              console.log("  Gang sheet instances:", gangSheetData.instanceLayout?.length || 0);
-            }
-            
-            // Always create new order - simple and reliable
-            const insertResult = await client.query(
-              `INSERT INTO dtf_orders
-                 (mode, size, quantity, transfer_name, garment_color, notes,
-                  files, unit_price_cents, total_price_cents, stripe_session_id, status, gang_sheet_data)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11::jsonb)
-               RETURNING id, gang_sheet_data`,
-              [
-                mode,
-                size,
-                quantity,
-                transferName,
-                garmentColor,
-                notes,
-                JSON.stringify(uploadedFiles),
-                unitPriceCents,
-                totalPriceCents,
-                tempSessionId,
-                gangSheetData, // Will be NULL if not gang-sheet order
-              ]
-            );
-            
-            if (insertResult.rows.length > 0) {
-              tempOrderId = insertResult.rows[0].id;
-              const savedGangSheetData = insertResult.rows[0].gang_sheet_data;
-              console.log("✓ Created order record");
-              console.log("  Order ID:", tempOrderId);
-              console.log("  Temp session_id:", tempSessionId);
-              console.log("  gang_sheet_data saved:", savedGangSheetData ? "YES" : "NO (expected for non-gang-sheet orders)");
-              
-              if (gangSheetData && !savedGangSheetData) {
-                console.error("ERROR: gang_sheet_data was NOT saved but should have been!");
-              }
-              
-              // CRITICAL: Ensure tempOrderId is set before creating Stripe session
-              if (!tempOrderId) {
-                console.error("CRITICAL ERROR: tempOrderId is not set! Cannot create Stripe session with orderId.");
-              }
-            } else {
-              console.error("ERROR: Order insert returned no rows");
-              // Don't continue if we can't create the order
-              res.statusCode = 500;
-              res.setHeader("Content-Type", "application/json");
-              return res.end(JSON.stringify({ error: "Failed to create order record." }));
-            }
-          } finally {
-            client.release();
-          }
-        } catch (dbErr) {
-          console.error("CRITICAL: Failed to create order record:", dbErr);
-          console.error("  Error message:", dbErr.message);
-          console.error("  Error stack:", dbErr.stack);
-          // Don't continue - fail the request if we can't save the order
-          res.statusCode = 500;
-          res.setHeader("Content-Type", "application/json");
-          return res.end(JSON.stringify({ 
-            error: "Failed to create order. Please try again.",
-            details: process.env.NODE_ENV === 'development' ? dbErr.message : undefined
-          }));
-        }
-      } else {
-        console.error("CRITICAL: Database pool not available");
-        res.statusCode = 500;
-        res.setHeader("Content-Type", "application/json");
-        return res.end(JSON.stringify({ error: "Database not available. Please try again later." }));
-      }
+      // NOTE: We do NOT create the order here anymore
+      // The order will be created in the webhook when checkout completes
+      // This simplifies the flow and prevents duplicate orders
+      console.log("Order will be created in webhook after checkout completes");
 
       let checkoutUrl = null;
       if (stripe && totalPriceCents && totalPriceCents > 0) {
         const origin = (req.headers.origin || "").replace(/\/$/, "");
         
-        // Build metadata - include order ID so webhook can find and update it
-        // CRITICAL: tempOrderId MUST be set at this point
-        if (!tempOrderId) {
-          console.error("CRITICAL ERROR: tempOrderId is not set! Cannot proceed with Stripe checkout.");
-          res.statusCode = 500;
-          res.setHeader("Content-Type", "application/json");
-          return res.end(JSON.stringify({ error: "Failed to create order. Please try again." }));
-        }
-        
+        // Build metadata for webhook - webhook will create the order
         const metadata = {
-          orderId: String(tempOrderId), // Primary identifier - CRITICAL for webhook to find order
           mode,
           size,
           quantity: String(quantity),
@@ -231,11 +127,6 @@ module.exports = (req, res) => {
           totalPriceCents:
             totalPriceCents != null ? String(totalPriceCents) : "",
         };
-        
-        console.log("Creating Stripe session with metadata:");
-        console.log("  orderId:", metadata.orderId);
-        console.log("  mode:", metadata.mode);
-        console.log("  All metadata keys:", Object.keys(metadata));
         
         const session = await stripe.checkout.sessions.create({
           mode: "payment",

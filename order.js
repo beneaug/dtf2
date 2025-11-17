@@ -30,19 +30,53 @@ document.addEventListener("DOMContentLoaded", () => {
         "Thanks — your DTF order is in the queue. You'll receive a Stripe receipt shortly.";
       bannerEl.classList.add("order-banner--success");
       
-      // Update order with shipping address from Stripe session
+      // Update order with shipping address and gang sheet data from localStorage
       if (sessionId) {
-        fetch(`/api/update-order-shipping?session_id=${encodeURIComponent(sessionId)}`)
+        // Get gang sheet data from localStorage if it exists
+        let gangSheetData = null;
+        try {
+          const stored = localStorage.getItem('pendingGangSheetData');
+          if (stored) {
+            gangSheetData = JSON.parse(stored);
+            console.log('Found gang sheet data in localStorage, will send to server');
+          }
+        } catch (err) {
+          console.error('Failed to read gang sheet data from localStorage:', err);
+        }
+
+        // Send both shipping address and gang sheet data
+        fetch(`/api/update-order-after-checkout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            sessionId,
+            gangSheetData,
+          }),
+        })
           .then(res => res.json())
           .then(data => {
-            if (data.ok && data.shippingAddress) {
-              console.log("Shipping address updated successfully");
+            if (data.ok) {
+              console.log("Order updated successfully");
+              if (data.gangSheetDataSaved) {
+                console.log("Gang sheet data saved successfully");
+                // Clear localStorage after successful save
+                try {
+                  localStorage.removeItem('pendingGangSheetData');
+                } catch (err) {
+                  console.error('Failed to clear localStorage:', err);
+                }
+              }
+              if (data.shippingAddress) {
+                console.log("Shipping address updated successfully");
+              }
             } else {
-              console.log("No shipping address found or already updated");
+              console.error("Failed to update order:", data.error);
             }
           })
           .catch(err => {
-            console.error("Failed to update shipping address:", err);
+            console.error("Failed to update order:", err);
           });
       }
     } else if (isCanceled) {

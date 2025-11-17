@@ -78,95 +78,26 @@ module.exports = (req, res) => {
         m.unitPriceCents != null ? parseInt(m.unitPriceCents, 10) : null;
       const totalPriceCents =
         m.totalPriceCents != null ? parseInt(m.totalPriceCents, 10) : null;
-      
-      // STEP 1: Find existing order by orderId from metadata
-      // This is the primary and only reliable way to match orders
-      const orderId = m.orderId ? parseInt(m.orderId, 10) : null;
+
+      // Check if order already exists for this session (shouldn't happen, but be safe)
       let existingOrder = null;
-      
-      console.log("=== WEBHOOK PROCESSING ===");
-      console.log("Session ID:", session.id);
-      console.log("Full metadata:", JSON.stringify(m, null, 2));
-      console.log("Metadata orderId:", m.orderId, "parsed:", orderId);
-      console.log("Metadata mode:", m.mode);
-      console.log("All metadata keys:", Object.keys(m || {}));
-      
-      if (orderId) {
-        console.log("Looking for order by ID:", orderId);
+      try {
+        const checkClient = await pool.connect();
         try {
-          const checkClient = await pool.connect();
-          try {
-            const checkResult = await checkClient.query(
-              `SELECT id, gang_sheet_data, stripe_session_id, created_at, status 
-               FROM dtf_orders 
-               WHERE id = $1`,
-              [orderId]
-            );
-            
-            if (checkResult.rows.length > 0) {
-              existingOrder = checkResult.rows[0];
-              const hasGangSheetData = existingOrder.gang_sheet_data !== null;
-              console.log("✓ Found existing order by ID:", existingOrder.id);
-              console.log("  Created at:", existingOrder.created_at);
-              console.log("  Current session_id:", existingOrder.stripe_session_id);
-              console.log("  Status:", existingOrder.status);
-              console.log("  Has gang_sheet_data:", hasGangSheetData);
-              
-              if (hasGangSheetData) {
-                const dataPreview = JSON.stringify(existingOrder.gang_sheet_data).substring(0, 150);
-                console.log("  Data preview:", dataPreview);
-              }
-            } else {
-              console.error("ERROR: Order not found by ID:", orderId);
-            }
-          } finally {
-            checkClient.release();
+          const checkResult = await checkClient.query(
+            `SELECT id, gang_sheet_data, stripe_session_id FROM dtf_orders WHERE stripe_session_id = $1`,
+            [session.id]
+          );
+          if (checkResult.rows.length > 0) {
+            existingOrder = checkResult.rows[0];
+            console.log("✓ Order already exists for this session:", existingOrder.id);
+            console.log("  Has gang_sheet_data:", existingOrder.gang_sheet_data ? "YES" : "NO");
           }
-        } catch (dbErr) {
-          console.error("ERROR: Failed to check for existing order:", dbErr);
-          console.error("  Error details:", dbErr.message);
+        } finally {
+          checkClient.release();
         }
-      } else {
-        console.warn("WARNING: No orderId in metadata - cannot find existing order");
-        console.log("  Available metadata keys:", Object.keys(m));
-      }
-      
-      if (!existingOrder) {
-        console.warn("WARNING: No existing order found!");
-        console.warn("  This should NOT happen for gang-sheet orders created after the update");
-        console.warn("  Will create new order (this will result in duplicate if orderId was missing from metadata)");
-        
-        // Last resort: Try to find by pending session_id pattern if mode is gang-sheet
-        if (m.mode === 'gang-sheet') {
-          console.log("Attempting fallback: searching for pending orders with gang_sheet_data");
-          try {
-            const fallbackClient = await pool.connect();
-            try {
-              const fallbackResult = await fallbackClient.query(
-                `SELECT id, gang_sheet_data, stripe_session_id, created_at
-                 FROM dtf_orders 
-                 WHERE stripe_session_id LIKE 'pending-%'
-                   AND gang_sheet_data IS NOT NULL
-                   AND mode = 'gang-sheet'
-                   AND created_at > NOW() - INTERVAL '15 minutes'
-                 ORDER BY created_at DESC
-                 LIMIT 1`,
-                []
-              );
-              
-              if (fallbackResult.rows.length > 0) {
-                existingOrder = fallbackResult.rows[0];
-                console.log("✓ Found pending order via fallback:", existingOrder.id);
-                console.log("  Created at:", existingOrder.created_at);
-                console.log("  Session_id:", existingOrder.stripe_session_id);
-              }
-            } finally {
-              fallbackClient.release();
-            }
-          } catch (fallbackErr) {
-            console.error("Fallback search failed:", fallbackErr);
-          }
-        }
+      } catch (dbErr) {
+        console.error("Failed to check for existing order:", dbErr);
       }
 
       // Extract shipping address from session
@@ -275,97 +206,28 @@ module.exports = (req, res) => {
         
         let result;
         
-        // If we have an existing order (created before checkout), just update it
+        // If order already exists, just update shipping address
+        // Gang sheet data will be added later via /api/update-order-after-checkout
         if (existingOrder) {
-          console.log("Updating existing order", existingOrder.id, "with Stripe session", session.id);
-          console.log("  Current session_id:", existingOrder.stripe_session_id);
-          console.log("  Has gang_sheet_data:", existingOrder.gang_sheet_data ? "YES" : "NO");
-          
-          // First check if this session_id is already used by another order
-          const conflictCheck = await client.query(
-            `SELECT id FROM dtf_orders WHERE stripe_session_id = $1 AND id != $2`,
-            [session.id, existingOrder.id]
+          console.log("Order already exists, updating shipping address only");
+          result = await client.query(
+            `UPDATE dtf_orders
+             SET shipping_address = COALESCE($1, shipping_address),
+                 status = COALESCE(status, 'pending')
+             WHERE id = $2
+             RETURNING id, shipping_address, gang_sheet_data`,
+            [finalShippingAddressJson, existingOrder.id]
           );
-          
-          if (conflictCheck.rowCount > 0) {
-            console.error("ERROR: Session ID", session.id, "already exists for order", conflictCheck.rows[0].id);
-            console.error("  This should not happen - session IDs should be unique");
-          }
-          
-          // Update the existing order - ONLY update session_id and shipping_address
-          // DO NOT touch gang_sheet_data - it's already saved and correct
-          // Only update if session_id is still pending (not already completed)
-          const shouldUpdate = !existingOrder.stripe_session_id || existingOrder.stripe_session_id.startsWith('pending-');
-          
-          if (shouldUpdate) {
-            result = await client.query(
-              `UPDATE dtf_orders
-               SET stripe_session_id = $1,
-                   shipping_address = COALESCE($2, shipping_address),
-                   status = COALESCE(status, 'pending')
-               WHERE id = $3
-                 AND (stripe_session_id IS NULL OR stripe_session_id LIKE 'pending-%')
-               RETURNING id, shipping_address, gang_sheet_data, stripe_session_id`,
-              [session.id, finalShippingAddressJson, existingOrder.id]
-            );
-            
-            if (result.rowCount > 0) {
-              const updated = result.rows[0];
-              const hasGangSheetData = updated.gang_sheet_data !== null;
-              console.log("✓ Updated existing order");
-              console.log("  New session_id:", updated.stripe_session_id);
-              console.log("  Has gang_sheet_data:", hasGangSheetData);
-              
-              // Verify gang_sheet_data was preserved
-              if (!hasGangSheetData && existingOrder.gang_sheet_data) {
-                console.error("CRITICAL ERROR: gang_sheet_data was lost during update!");
-                console.error("  Original had data:", !!existingOrder.gang_sheet_data);
-                console.error("  Updated has data:", hasGangSheetData);
-              } else if (hasGangSheetData) {
-                console.log("  ✓ gang_sheet_data preserved successfully");
-              }
-            } else {
-              console.error("ERROR: Update returned 0 rows");
-              console.error("  Order ID:", existingOrder.id);
-              console.error("  Current session_id:", existingOrder.stripe_session_id);
-              // Fall through to create new order (shouldn't happen but handle gracefully)
-              result = null;
-            }
-          } else {
-            console.log("Order already has a real session_id, skipping update");
-            console.log("  Current session_id:", existingOrder.stripe_session_id);
-            result = { rowCount: 0 };
-          }
         } else {
-          // No existing order - create new one (fallback for non-gang-sheet orders)
-          console.log("Creating new order (no existing order found)");
-          
-          // Check if session_id already exists
-          const existingSessionCheck = await client.query(
-            `SELECT id, gang_sheet_data FROM dtf_orders WHERE stripe_session_id = $1`,
-            [session.id]
-          );
-          
-          if (existingSessionCheck.rowCount > 0) {
-            console.log("Order with this session_id already exists, updating it");
-            const existing = existingSessionCheck.rows[0];
-            result = await client.query(
-              `UPDATE dtf_orders
-               SET shipping_address = COALESCE($1, shipping_address),
-                   status = COALESCE(status, 'pending')
-               WHERE stripe_session_id = $2
-               RETURNING id, shipping_address, gang_sheet_data`,
-              [finalShippingAddressJson, session.id]
-            );
-          } else {
-            // Create new order
-            const query = `INSERT INTO dtf_orders
-                 (mode, size, quantity, transfer_name, garment_color, notes,
-                  files, unit_price_cents, total_price_cents, stripe_session_id, status, shipping_address)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11)
-               RETURNING id, shipping_address`;
-            
-            const params = [
+          // Create new order - gang sheet data will be added later via success page
+          console.log("Creating new order in webhook");
+          result = await client.query(
+            `INSERT INTO dtf_orders
+             (mode, size, quantity, transfer_name, garment_color, notes,
+              files, unit_price_cents, total_price_cents, stripe_session_id, status, shipping_address)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11)
+           RETURNING id, shipping_address, gang_sheet_data`,
+            [
               mode,
               size,
               quantity,
@@ -377,10 +239,8 @@ module.exports = (req, res) => {
               totalPriceCents,
               session.id,
               finalShippingAddressJson,
-            ];
-            
-            result = await client.query(query, params);
-          }
+            ]
+          );
         }
 
         if (result && result.rowCount > 0) {
