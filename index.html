@@ -219,7 +219,7 @@
 
           // Ensure the initial visual state matches the configured hero/dock
           // settings on first load and after resizes.
-          targetScrollY = window.scrollY || window.pageYOffset || 0;
+          targetScrollY = Math.max(0, window.scrollY || window.pageYOffset || 0);
           smoothedScrollY = targetScrollY;
           applyScrollEffects(targetScrollY);
         }
@@ -241,6 +241,9 @@
         }
 
         function applyScrollEffects(scrollY) {
+          // Clamp scroll position to prevent negative values from overscroll
+          scrollY = Math.max(0, scrollY);
+          
           if (image && secondSection) {
             var y, scale, offsetX;
 
@@ -315,7 +318,8 @@
         }
 
         function onScroll() {
-          targetScrollY = window.scrollY || window.pageYOffset || 0;
+          // Clamp to prevent negative values from overscroll
+          targetScrollY = Math.max(0, window.scrollY || window.pageYOffset || 0);
           if (!isMobileViewport) {
             applyScrollEffects(targetScrollY);
           }
@@ -327,6 +331,8 @@
             if (Math.abs(diff) > 0.1) {
               // Lerp toward the real scroll position for smoother, less "strained" motion
               smoothedScrollY += diff * 0.2;
+              // Clamp to prevent negative values from overscroll
+              smoothedScrollY = Math.max(0, smoothedScrollY);
               applyScrollEffects(smoothedScrollY);
             }
           }

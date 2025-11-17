@@ -10,6 +10,9 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
+  /* Prevent overscroll bounce on mobile to avoid background flickering */
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 body {
@@ -25,6 +28,8 @@ body {
   width: 100%;
   overflow: hidden;
   background-color: #050608;
+  /* Prevent overscroll bounce on mobile */
+  overscroll-behavior: none;
 }
 
 /* === Scraped gradient background structure ===
