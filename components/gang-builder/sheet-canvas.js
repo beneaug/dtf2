@@ -21,9 +21,14 @@ export function create(container) {
     </div>
   `;
 
+  const canvasWrapper = container.querySelector(".gang-canvas-wrapper");
   const canvasContainer = container.querySelector("#gang-canvas-container");
   const canvas = container.querySelector("#gang-canvas");
   const ctx = canvas.getContext("2d");
+  
+  // Track sheet size to detect changes and scroll to top
+  const initialState = store.getState();
+  let lastSheetSizeId = initialState.selectedSheetSizeId;
 
   let isDragging = false;
   let dragStartX = 0;
@@ -406,6 +411,17 @@ export function create(container) {
         });
       }
     });
+    
+    // If sheet size changed, scroll to top
+    if (lastSheetSizeId !== null && lastSheetSizeId !== state.selectedSheetSizeId) {
+      // Scroll wrapper to top when sheet size changes
+      if (canvasWrapper) {
+        canvasWrapper.scrollTop = 0;
+        canvasWrapper.scrollLeft = 0;
+      }
+    }
+    lastSheetSizeId = state.selectedSheetSizeId;
+    
     render();
   });
 
