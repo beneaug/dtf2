@@ -31,12 +31,38 @@ export function create(container) {
   let dragInstanceId = null;
   let selectedInstanceId = null;
 
+  // Image cache to avoid reloading images
+  const imageCache = new Map();
+
+  // Preload an image and cache it
+  function preloadImage(url) {
+    if (imageCache.has(url)) {
+      return Promise.resolve(imageCache.get(url));
+    }
+
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        imageCache.set(url, img);
+        resolve(img);
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+  }
+
   // Resize canvas to fit container
   function resizeCanvas() {
     const rect = canvasContainer.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-    render();
+    // Ensure we have valid dimensions
+    if (rect.width > 0 && rect.height > 0) {
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+      render();
+    } else {
+      // Retry after a short delay if container isn't sized yet
+      setTimeout(() => resizeCanvas(), 50);
+    }
   }
 
   // Render the sheet and instances
@@ -77,12 +103,17 @@ export function create(container) {
       }
     }
 
-    // Draw sheet background
-    ctx.fillStyle = "rgba(10, 11, 15, 0.9)";
+    // Draw sheet background - make it more visible
+    ctx.fillStyle = "rgba(20, 22, 28, 0.95)";
     ctx.fillRect(offsetX, offsetY, sheetWidthPx, sheetHeightPx);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
     ctx.lineWidth = 2;
     ctx.strokeRect(offsetX, offsetY, sheetWidthPx, sheetHeightPx);
+    
+    // Add a subtle inner border for better visibility
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(offsetX + 1, offsetY + 1, sheetWidthPx - 2, sheetHeightPx - 2);
 
     // Draw sheet label
     ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
@@ -112,36 +143,30 @@ export function create(container) {
       ctx.strokeRect(x, y, width, height);
 
       // Draw design image (if loaded)
-      // Note: Images are cached by the browser, so we can create new Image objects
-      // For better performance, you could preload and cache images
       if (design.url) {
-        const img = new Image();
-        img.crossOrigin = "anonymous";
-        img.onload = () => {
-          // Re-render after image loads
-          render();
-        };
-        img.onerror = () => {
-          // Draw placeholder if image fails to load
-          ctx.fillStyle = "rgba(100, 100, 100, 0.3)";
-          ctx.fillRect(x, y, width, height);
-        };
-        try {
-          img.src = design.url;
-          // If image is already cached, draw it immediately
-          if (img.complete && img.naturalWidth > 0) {
-            ctx.save();
-            ctx.translate(x + width / 2, y + height / 2);
-            if (instance.rotationDeg) {
-              ctx.rotate((instance.rotationDeg * Math.PI) / 180);
-            }
-            ctx.drawImage(img, -width / 2, -height / 2, width, height);
-            ctx.restore();
+        const cachedImg = imageCache.get(design.url);
+        if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
+          // Image is cached and loaded, draw it
+          ctx.save();
+          ctx.translate(x + width / 2, y + height / 2);
+          if (instance.rotationDeg) {
+            ctx.rotate((instance.rotationDeg * Math.PI) / 180);
           }
-        } catch (e) {
-          // Fallback if image URL is invalid
-          ctx.fillStyle = "rgba(100, 100, 100, 0.3)";
-          ctx.fillRect(x, y, width, height);
+          ctx.drawImage(cachedImg, -width / 2, -height / 2, width, height);
+          ctx.restore();
+        } else {
+          // Preload the image if not cached
+          preloadImage(design.url)
+            .then(() => {
+              // Re-render after image loads
+              render();
+            })
+            .catch(() => {
+              // Draw placeholder if image fails to load
+              ctx.fillStyle = "rgba(100, 100, 100, 0.3)";
+              ctx.fillRect(x, y, width, height);
+              render();
+            });
         }
       }
 
@@ -251,13 +276,33 @@ export function create(container) {
   });
 
   // Subscribe to state changes
-  store.subscribe(() => {
+  store.subscribe((state) => {
+    // Preload any new design images
+    state.designFiles.forEach((design) => {
+      if (design.url && !imageCache.has(design.url)) {
+        preloadImage(design.url).catch(() => {
+          // Silently fail - will show placeholder in render
+        });
+      }
+    });
     render();
   });
 
   // Initial render and resize handling
-  resizeCanvas();
+  // Use requestAnimationFrame to ensure container is laid out
+  requestAnimationFrame(() => {
+    resizeCanvas();
+  });
+  
+  // Also try after a short delay in case container sizing is delayed
+  setTimeout(() => {
+    resizeCanvas();
+  }, 100);
+  
   window.addEventListener("resize", resizeCanvas);
+  
+  // Clean up image cache when component is destroyed (if needed)
+  // For now, we'll keep the cache for the session
 }
 
 export const SheetCanvas = { create };
