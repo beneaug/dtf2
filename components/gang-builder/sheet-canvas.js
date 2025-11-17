@@ -130,7 +130,6 @@ export function create(container) {
     const offsetY = paddingPx;
     
     // Resize canvas to fit the sheet if it's larger than display
-    // Canvas should be at least as large as the sheet plus padding
     const neededCanvasWidth = Math.max(displayWidth, sheetWidthPx + offsetX * 2);
     const neededCanvasHeight = Math.max(displayHeight, sheetHeightPx + offsetY * 2);
     
@@ -376,21 +375,77 @@ export function create(container) {
       newY = snapToGrid(newY, state.snapIncrement);
     }
 
-    // Check bounds (account for deadspace in bounds check)
+    // Check bounds and overlaps (account for deadspace and rotation)
     const sheetSize = getSheetSize(state.selectedSheetSizeId);
     if (sheetSize) {
       const deadspaceIn = 0.157; // 4mm
-      // Check if the instance (with deadspace) fits within bounds
-      if (isWithinBounds(
-        newX - deadspaceIn,
-        newY - deadspaceIn,
-        instance.widthIn + (deadspaceIn * 2),
-        instance.heightIn + (deadspaceIn * 2),
-        sheetSize.widthIn,
-        sheetSize.heightIn
-      )) {
-        store.updateInstance(dragInstanceId, { xIn: newX, yIn: newY });
+      const isRotated = instance.rotationDeg === 90;
+      
+      // Calculate bounding box for the new position
+      let box;
+      if (isRotated) {
+        const graphicCenterX = newX + instance.widthIn / 2;
+        const graphicCenterY = newY + instance.heightIn / 2;
+        const boxWidth = instance.heightIn + (deadspaceIn * 2);
+        const boxHeight = instance.widthIn + (deadspaceIn * 2);
+        box = {
+          xIn: graphicCenterX - boxWidth / 2,
+          yIn: graphicCenterY - boxHeight / 2,
+          widthIn: boxWidth,
+          heightIn: boxHeight,
+        };
+      } else {
+        box = {
+          xIn: newX - deadspaceIn,
+          yIn: newY - deadspaceIn,
+          widthIn: instance.widthIn + (deadspaceIn * 2),
+          heightIn: instance.heightIn + (deadspaceIn * 2),
+        };
       }
+      
+      // Check if bounding box is within sheet bounds
+      if (!isWithinBounds(box.xIn, box.yIn, box.widthIn, box.heightIn, sheetSize.widthIn, sheetSize.heightIn)) {
+        return; // Don't update if out of bounds
+      }
+      
+      // Check if bounding box overlaps with other instances (excluding the one being dragged)
+      const otherInstances = state.instances.filter((i) => i.id !== dragInstanceId);
+      for (const other of otherInstances) {
+        const otherIsRotated = other.rotationDeg === 90;
+        let otherBox;
+        if (otherIsRotated) {
+          const otherCenterX = other.xIn + other.widthIn / 2;
+          const otherCenterY = other.yIn + other.heightIn / 2;
+          const otherBoxWidth = other.heightIn + (deadspaceIn * 2);
+          const otherBoxHeight = other.widthIn + (deadspaceIn * 2);
+          otherBox = {
+            xIn: otherCenterX - otherBoxWidth / 2,
+            yIn: otherCenterY - otherBoxHeight / 2,
+            widthIn: otherBoxWidth,
+            heightIn: otherBoxHeight,
+          };
+        } else {
+          otherBox = {
+            xIn: other.xIn - deadspaceIn,
+            yIn: other.yIn - deadspaceIn,
+            widthIn: other.widthIn + (deadspaceIn * 2),
+            heightIn: other.heightIn + (deadspaceIn * 2),
+          };
+        }
+        
+        // Check for overlap
+        if (
+          box.xIn < otherBox.xIn + otherBox.widthIn &&
+          box.xIn + box.widthIn > otherBox.xIn &&
+          box.yIn < otherBox.yIn + otherBox.heightIn &&
+          box.yIn + box.heightIn > otherBox.yIn
+        ) {
+          return; // Don't update if overlapping
+        }
+      }
+      
+      // Position is valid - update it
+      store.updateInstance(dragInstanceId, { xIn: newX, yIn: newY });
     }
   });
 

@@ -429,17 +429,16 @@ function updateDesignsList(container, designFiles, onSelectDesign) {
       if (onSelectDesign) onSelectDesign(design.id);
     });
     
-    useBtn.addEventListener("click", () => {
-      // Verify design still exists before using
+    useBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // Verify design still exists before adding
       const currentState = store.getState();
       const currentDesign = currentState.designFiles.find((d) => d.id === design.id);
-      if (!currentDesign) {
+      if (currentDesign) {
+        store.addInstancesForDesign(design.id, 1, false);
+      } else {
         console.warn(`Design ${design.id} no longer exists`);
-        return;
-      }
-      const result = store.addInstancesForDesign(design.id, 1, false);
-      if (!result || result.maxInstances === 0) {
-        console.warn(`Failed to place design ${design.id} on sheet`);
       }
     });
     
