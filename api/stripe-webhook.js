@@ -90,9 +90,8 @@ module.exports = (req, res) => {
       console.log("Session shipping_details (from event):", session.shipping_details);
       
       try {
-        const fullSession = await stripe.checkout.sessions.retrieve(session.id, {
-          expand: ['customer_details', 'shipping_details'],
-        });
+        // Retrieve full session - shipping_details is already included by default
+        const fullSession = await stripe.checkout.sessions.retrieve(session.id);
         
         console.log("Retrieved full session. shipping_details:", fullSession.shipping_details);
         console.log("Full session customer_details:", fullSession.customer_details);
@@ -162,9 +161,7 @@ module.exports = (req, res) => {
         if (!shippingAddress) {
           console.log("Retrying shipping address retrieval...");
           try {
-            const retrySession = await stripe.checkout.sessions.retrieve(session.id, {
-              expand: ["shipping_details", "customer_details"],
-            });
+            const retrySession = await stripe.checkout.sessions.retrieve(session.id);
             if (retrySession.shipping_details && retrySession.shipping_details.address) {
               const addr = retrySession.shipping_details.address;
               shippingAddress = {

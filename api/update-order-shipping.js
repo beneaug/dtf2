@@ -36,9 +36,8 @@ module.exports = async (req, res) => {
 
   try {
     // Retrieve full session from Stripe
-    const fullSession = await stripe.checkout.sessions.retrieve(sessionId, {
-      expand: ["customer_details", "shipping_details"],
-    });
+    // Note: shipping_details is already included, no need to expand
+    const fullSession = await stripe.checkout.sessions.retrieve(sessionId);
 
     console.log("Retrieved session:", {
       id: fullSession.id,
