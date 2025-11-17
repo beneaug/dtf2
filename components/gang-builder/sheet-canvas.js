@@ -185,7 +185,7 @@ export function create(container) {
     ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
     ctx.font = "12px system-ui";
     ctx.textAlign = "center";
-    ctx.fillText(sheetSize.label, displayWidth / 2, offsetY - 10);
+    ctx.fillText(sheetSize.label, canvasWidth / 2, offsetY - 10);
 
     // Draw instances
     state.instances.forEach((instance) => {
@@ -271,8 +271,8 @@ export function create(container) {
       offsetY,
       scale,
       sheetSize,
-      displayWidth,
-      displayHeight,
+      displayWidth: canvasWidth,
+      displayHeight: canvasHeight,
     };
   }
 
