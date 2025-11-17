@@ -66,6 +66,11 @@ export function create(container) {
   
   // Zoom state (1.0 = 100%, 1.25 = 125%, etc.)
   let zoomLevel = initialZoom;
+  
+  // Robust state management for sheet size changes
+  let pendingSheetSizeId = null;
+  let sheetSizeChangeTimeout = null;
+  let isProcessingSheetSizeChange = false;
 
   let isDragging = false;
   let dragStartX = 0;
@@ -98,6 +103,95 @@ export function create(container) {
   let containerHeight = 0;
   let isResizing = false; // Prevent recursive resize calls
   let pendingResizeFrame = null; // Track pending resize animation frame
+  
+  // Process sheet size change with complete state reset
+  function processSheetSizeChange(newSheetSizeId) {
+    if (isProcessingSheetSizeChange) {
+      // If already processing, queue this one
+      pendingSheetSizeId = newSheetSizeId;
+      return;
+    }
+    
+    isProcessingSheetSizeChange = true;
+    
+    // Cancel ALL pending operations
+    if (pendingResizeFrame !== null) {
+      cancelAnimationFrame(pendingResizeFrame);
+      pendingResizeFrame = null;
+    }
+    if (pendingZoomFrame !== null) {
+      cancelAnimationFrame(pendingZoomFrame);
+      pendingZoomFrame = null;
+    }
+    if (sheetSizeChangeTimeout !== null) {
+      clearTimeout(sheetSizeChangeTimeout);
+      sheetSizeChangeTimeout = null;
+    }
+    
+    // Reset all flags
+    isResizing = false;
+    isZooming = false;
+    
+    // Update tracked sheet size
+    lastSheetSizeId = newSheetSizeId;
+    
+    // Reset zoom to recommended level for this sheet size
+    const defaultZoom = getDefaultZoomForSheetSize(newSheetSizeId);
+    zoomLevel = defaultZoom;
+    updateZoomDisplay();
+    
+    // Clear canvas container inline styles to allow natural sizing
+    canvasContainer.style.width = '';
+    canvasContainer.style.height = '';
+    
+    // Force a layout recalculation by reading layout properties
+    void canvasWrapper.offsetHeight;
+    
+    // Wait for DOM to settle, then get fresh dimensions and resize
+    pendingResizeFrame = requestAnimationFrame(() => {
+      pendingResizeFrame = requestAnimationFrame(() => {
+        pendingResizeFrame = null;
+        
+        // Get fresh container dimensions from the wrapper
+        const wrapperRect = canvasWrapper.getBoundingClientRect();
+        if (wrapperRect.width > 0 && wrapperRect.height > 0) {
+          // Use wrapper dimensions minus padding for container
+          containerWidth = wrapperRect.width - 64; // Account for padding (2rem * 2 = 64px)
+          containerHeight = wrapperRect.height - 64;
+        } else {
+          // Fallback: get from canvasContainer
+          const rect = canvasContainer.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            containerWidth = rect.width;
+            containerHeight = rect.height;
+          }
+        }
+        
+        // Ensure flags are reset before resize
+        isResizing = false;
+        resizeCanvas();
+        
+        // Reposition controls and scroll to top
+        positionZoomControls();
+        requestAnimationFrame(() => {
+          if (canvasWrapper) {
+            canvasWrapper.scrollTop = 0;
+            canvasWrapper.scrollLeft = 0;
+          }
+          
+          // Mark processing as complete
+          isProcessingSheetSizeChange = false;
+          
+          // If there's a newer pending change, process it
+          if (pendingSheetSizeId !== null && pendingSheetSizeId !== lastSheetSizeId) {
+            const nextSheetSizeId = pendingSheetSizeId;
+            pendingSheetSizeId = null;
+            processSheetSizeChange(nextSheetSizeId);
+          }
+        });
+      });
+    });
+  }
   
   // Resize canvas to fit container with high DPI support
   function resizeCanvas() {
@@ -611,65 +705,31 @@ export function create(container) {
       }
     });
     
-    // If sheet size changed, reset zoom and resize canvas
-    const sheetSizeChanged = lastSheetSizeId !== null && lastSheetSizeId !== state.selectedSheetSizeId;
+    // Robust sheet size change handling with debouncing
+    const currentSheetSizeId = state.selectedSheetSizeId;
+    const sheetSizeChanged = lastSheetSizeId !== null && lastSheetSizeId !== currentSheetSizeId;
+    
     if (sheetSizeChanged) {
-      // Cancel any pending resize operations
-      if (pendingResizeFrame !== null) {
-        cancelAnimationFrame(pendingResizeFrame);
-        pendingResizeFrame = null;
+      // Store the new sheet size (always use the latest)
+      pendingSheetSizeId = currentSheetSizeId;
+      
+      // Clear any existing timeout
+      if (sheetSizeChangeTimeout !== null) {
+        clearTimeout(sheetSizeChangeTimeout);
+        sheetSizeChangeTimeout = null;
       }
       
-      // Reset all flags to allow fresh start
-      isResizing = false;
-      isZooming = false;
-      
-      lastSheetSizeId = state.selectedSheetSizeId;
-      
-      // Reset zoom to recommended level for this sheet size
-      const defaultZoom = getDefaultZoomForSheetSize(state.selectedSheetSizeId);
-      zoomLevel = defaultZoom;
-      updateZoomDisplay();
-      
-      // Clear canvas container inline styles to allow natural sizing
-      canvasContainer.style.width = '';
-      canvasContainer.style.height = '';
-      
-      // Wait for DOM to settle, then get fresh dimensions and resize
-      pendingResizeFrame = requestAnimationFrame(() => {
-        pendingResizeFrame = null;
-        
-        // Get fresh container dimensions from the wrapper
-        const wrapperRect = canvasWrapper.getBoundingClientRect();
-        if (wrapperRect.width > 0 && wrapperRect.height > 0) {
-          // Use wrapper dimensions minus padding for container
-          containerWidth = wrapperRect.width - 64; // Account for padding (2rem * 2 = 64px)
-          containerHeight = wrapperRect.height - 64;
-        } else {
-          // Fallback: get from canvasContainer
-          const rect = canvasContainer.getBoundingClientRect();
-          if (rect.width > 0 && rect.height > 0) {
-            containerWidth = rect.width;
-            containerHeight = rect.height;
-          }
+      // Debounce: wait a short time to see if another change comes in
+      sheetSizeChangeTimeout = setTimeout(() => {
+        // Only process if this is still the latest change
+        if (pendingSheetSizeId === currentSheetSizeId && !isProcessingSheetSizeChange) {
+          processSheetSizeChange(pendingSheetSizeId);
         }
-        
-        // Ensure flags are reset before resize
-        isResizing = false;
-        resizeCanvas();
-        
-        // Reposition controls and scroll to top
-        positionZoomControls();
-        requestAnimationFrame(() => {
-          if (canvasWrapper) {
-            canvasWrapper.scrollTop = 0;
-            canvasWrapper.scrollLeft = 0;
-          }
-        });
-      });
+        sheetSizeChangeTimeout = null;
+      }, 50); // 50ms debounce
     } else {
       // Just render, don't resize
-      lastSheetSizeId = state.selectedSheetSizeId;
+      lastSheetSizeId = currentSheetSizeId;
       render();
     }
   });
