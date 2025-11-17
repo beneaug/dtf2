@@ -95,12 +95,25 @@ export function create(container) {
     const baseSheetWidthPx = convertInchesToPixels(sheetSize.widthIn);
     const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
     
-    // Calculate scale to fit sheet to 95% of canvas (larger view, still prevents cutoff)
-    const scaleX = (displayWidth * 0.95) / baseSheetWidthPx;
-    const scaleY = (displayHeight * 0.95) / baseSheetHeightPx;
+    // Use a fixed minimum target size for the sheet (ensures large preview)
+    // This makes the sheet always render at a large size, may overflow canvas
+    const MIN_SHEET_WIDTH = 1400; // Minimum width in pixels for large preview
+    const MIN_SHEET_HEIGHT = 800; // Minimum height in pixels
     
-    // Use the smaller scale to ensure it fits both dimensions
-    const scale = Math.min(scaleX, scaleY);
+    // Calculate scale to reach minimum size
+    const scaleForMinWidth = MIN_SHEET_WIDTH / baseSheetWidthPx;
+    const scaleForMinHeight = MIN_SHEET_HEIGHT / baseSheetHeightPx;
+    
+    // Use the larger scale to ensure we hit minimum size
+    let scale = Math.max(scaleForMinWidth, scaleForMinHeight);
+    
+    // But also check if we can fit in canvas - if so, use that for better fit
+    const fitScaleX = (displayWidth * 0.98) / baseSheetWidthPx;
+    const fitScaleY = (displayHeight * 0.98) / baseSheetHeightPx;
+    const fitScale = Math.min(fitScaleX, fitScaleY);
+    
+    // Use whichever is larger - ensures minimum size OR fits canvas if canvas is huge
+    scale = Math.max(scale, fitScale);
 
     const sheetWidthPx = baseSheetWidthPx * scale;
     const sheetHeightPx = baseSheetHeightPx * scale;
