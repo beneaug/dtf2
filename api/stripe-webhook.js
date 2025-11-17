@@ -221,23 +221,48 @@ module.exports = (req, res) => {
         let result;
         if (preOrderId) {
           console.log("Updating pre-order", preOrderId, "with Stripe session", session.id);
-          result = await client.query(
-            `UPDATE dtf_orders
-             SET stripe_session_id = $1,
-                 shipping_address = COALESCE($2, shipping_address),
-                 status = COALESCE(status, 'pending')
-             WHERE id = $3
-             RETURNING id, shipping_address, gang_sheet_data`,
-            [session.id, finalShippingAddressJson, preOrderId]
+          
+          // First verify the pre-order exists and has gang_sheet_data
+          const checkResult = await client.query(
+            `SELECT id, gang_sheet_data FROM dtf_orders WHERE id = $1`,
+            [preOrderId]
           );
           
-          if (result.rowCount === 0) {
+          if (checkResult.rowCount === 0) {
             console.error("Pre-order not found:", preOrderId);
-            // Fall through to create new order
             result = null; // Signal to create new order
           } else {
-            console.log("✓ Updated pre-order with Stripe session ID");
-            // Gang sheet data is already in the database from the pre-order
+            const hasGangSheetData = checkResult.rows[0].gang_sheet_data !== null;
+            console.log("Pre-order found. Has gang_sheet_data:", hasGangSheetData);
+            if (!hasGangSheetData) {
+              console.error("WARNING: Pre-order exists but gang_sheet_data is NULL!");
+            }
+            
+            // Update the pre-order - explicitly preserve gang_sheet_data
+            // Get the existing gang_sheet_data first to ensure we preserve it
+            const existingGangSheetData = checkResult.rows[0].gang_sheet_data;
+            
+            result = await client.query(
+              `UPDATE dtf_orders
+               SET stripe_session_id = $1,
+                   shipping_address = COALESCE($2, shipping_address),
+                   status = COALESCE(status, 'pending'),
+                   gang_sheet_data = COALESCE($4, gang_sheet_data)
+               WHERE id = $3
+               RETURNING id, shipping_address, gang_sheet_data`,
+              [session.id, finalShippingAddressJson, preOrderId, existingGangSheetData]
+            );
+            
+            if (result.rowCount > 0) {
+              const updatedHasData = result.rows[0].gang_sheet_data !== null;
+              const updatedDataStr = updatedHasData ? JSON.stringify(result.rows[0].gang_sheet_data).substring(0, 100) : "null";
+              console.log("✓ Updated pre-order. Has gang_sheet_data after update:", updatedHasData);
+              console.log("  Data preview:", updatedDataStr);
+              if (!updatedHasData && hasGangSheetData) {
+                console.error("ERROR: gang_sheet_data was lost during update!");
+                console.error("  Existing data before update:", existingGangSheetData ? "present" : "null");
+              }
+            }
           }
         }
         

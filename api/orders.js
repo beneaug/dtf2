@@ -98,13 +98,15 @@ module.exports = (req, res) => {
             try {
               const client = await pool.connect();
               try {
-                const gangSheetDataJson = JSON.stringify(gangSheetData);
+                // For JSONB columns, pg library can accept either JSON string or object
+                // Pass as object to let pg handle the conversion
+                console.log("Creating pre-order with gang_sheet_data, size:", JSON.stringify(gangSheetData).length, "chars");
                 const result = await client.query(
                   `INSERT INTO dtf_orders
                      (mode, size, quantity, transfer_name, garment_color, notes,
                       files, unit_price_cents, total_price_cents, status, gang_sheet_data)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10)
-                   RETURNING id`,
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10::jsonb)
+                   RETURNING id, gang_sheet_data`,
                   [
                     mode,
                     size,
@@ -115,12 +117,16 @@ module.exports = (req, res) => {
                     JSON.stringify(uploadedFiles),
                     unitPriceCents,
                     totalPriceCents,
-                    gangSheetDataJson,
+                    gangSheetData, // Pass object directly, let pg convert to JSONB
                   ]
                 );
                 if (result.rows.length > 0) {
                   preOrderId = result.rows[0].id;
-                  console.log("Created pre-order with gang sheet data, ID:", preOrderId);
+                  const savedData = result.rows[0].gang_sheet_data;
+                  console.log("✓ Created pre-order ID:", preOrderId, "gang_sheet_data saved:", savedData ? "yes" : "NO - NULL!");
+                  if (!savedData) {
+                    console.error("ERROR: gang_sheet_data was not saved to pre-order! This indicates a database issue.");
+                  }
                 }
               } finally {
                 client.release();
