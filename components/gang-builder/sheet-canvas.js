@@ -97,6 +97,7 @@ export function create(container) {
   let containerWidth = 0;
   let containerHeight = 0;
   let isResizing = false; // Prevent recursive resize calls
+  let pendingResizeFrame = null; // Track pending resize animation frame
   
   // Resize canvas to fit container with high DPI support
   function resizeCanvas() {
@@ -551,10 +552,17 @@ export function create(container) {
   }
 
   let isZooming = false; // Prevent recursive zoom calls
+  let pendingZoomFrame = null; // Track pending zoom animation frame
   
   function setZoom(level) {
     // Prevent recursive calls
     if (isZooming) return;
+    
+    // Cancel any pending zoom operations
+    if (pendingZoomFrame !== null) {
+      cancelAnimationFrame(pendingZoomFrame);
+      pendingZoomFrame = null;
+    }
     
     // Clamp zoom between 0.25x (25%) and 4x (400%)
     const newZoom = Math.max(0.25, Math.min(4.0, level));
@@ -565,10 +573,13 @@ export function create(container) {
     updateZoomDisplay();
     
     // Resize canvas to accommodate new zoom level
+    // Reset isResizing to allow resize during zoom
+    isResizing = false;
     resizeCanvas();
     
     // Reposition controls after resize (they should stay fixed)
-    requestAnimationFrame(() => {
+    pendingZoomFrame = requestAnimationFrame(() => {
+      pendingZoomFrame = null;
       positionZoomControls();
       isZooming = false;
     });
@@ -603,6 +614,16 @@ export function create(container) {
     // If sheet size changed, reset zoom and resize canvas
     const sheetSizeChanged = lastSheetSizeId !== null && lastSheetSizeId !== state.selectedSheetSizeId;
     if (sheetSizeChanged) {
+      // Cancel any pending resize operations
+      if (pendingResizeFrame !== null) {
+        cancelAnimationFrame(pendingResizeFrame);
+        pendingResizeFrame = null;
+      }
+      
+      // Reset all flags to allow fresh start
+      isResizing = false;
+      isZooming = false;
+      
       lastSheetSizeId = state.selectedSheetSizeId;
       
       // Reset zoom to recommended level for this sheet size
@@ -615,7 +636,9 @@ export function create(container) {
       canvasContainer.style.height = '';
       
       // Wait for DOM to settle, then get fresh dimensions and resize
-      requestAnimationFrame(() => {
+      pendingResizeFrame = requestAnimationFrame(() => {
+        pendingResizeFrame = null;
+        
         // Get fresh container dimensions from the wrapper
         const wrapperRect = canvasWrapper.getBoundingClientRect();
         if (wrapperRect.width > 0 && wrapperRect.height > 0) {
@@ -631,7 +654,7 @@ export function create(container) {
           }
         }
         
-        // Reset the isResizing flag and resize
+        // Ensure flags are reset before resize
         isResizing = false;
         resizeCanvas();
         
