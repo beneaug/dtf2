@@ -219,6 +219,8 @@ module.exports = (req, res) => {
         
         // If we have a pre-order ID, update that record instead of creating a new one
         let result;
+        let updatedPreOrder = false;
+        
         if (preOrderId) {
           console.log("Updating pre-order", preOrderId, "with Stripe session", session.id);
           
@@ -229,18 +231,25 @@ module.exports = (req, res) => {
           );
           
           if (checkResult.rowCount === 0) {
-            console.error("Pre-order not found:", preOrderId);
+            console.error("Pre-order not found:", preOrderId, "- will create new order");
             result = null; // Signal to create new order
           } else {
-            const hasGangSheetData = checkResult.rows[0].gang_sheet_data !== null;
+            let existingGangSheetData = checkResult.rows[0].gang_sheet_data;
+            const hasGangSheetData = existingGangSheetData !== null;
             console.log("Pre-order found. Has gang_sheet_data:", hasGangSheetData);
+            
             if (!hasGangSheetData) {
               console.error("WARNING: Pre-order exists but gang_sheet_data is NULL!");
+              // If we have gangSheetData from retrieval, use it
+              if (gangSheetData) {
+                console.log("Using retrieved gangSheetData to populate missing data");
+                existingGangSheetData = gangSheetData;
+              }
             }
             
-            // Update the pre-order - explicitly preserve gang_sheet_data
-            // Get the existing gang_sheet_data first to ensure we preserve it
-            const existingGangSheetData = checkResult.rows[0].gang_sheet_data;
+            // Update the pre-order - explicitly preserve or set gang_sheet_data
+            // Use the existing data if available, otherwise use retrieved data, otherwise keep existing
+            const dataToSave = existingGangSheetData || gangSheetData;
             
             result = await client.query(
               `UPDATE dtf_orders
@@ -250,33 +259,38 @@ module.exports = (req, res) => {
                    gang_sheet_data = COALESCE($4, gang_sheet_data)
                WHERE id = $3
                RETURNING id, shipping_address, gang_sheet_data`,
-              [session.id, finalShippingAddressJson, preOrderId, existingGangSheetData]
+              [session.id, finalShippingAddressJson, preOrderId, dataToSave]
             );
             
             if (result.rowCount > 0) {
+              updatedPreOrder = true;
               const updatedHasData = result.rows[0].gang_sheet_data !== null;
               const updatedDataStr = updatedHasData ? JSON.stringify(result.rows[0].gang_sheet_data).substring(0, 100) : "null";
               console.log("✓ Updated pre-order. Has gang_sheet_data after update:", updatedHasData);
               console.log("  Data preview:", updatedDataStr);
-              if (!updatedHasData && hasGangSheetData) {
-                console.error("ERROR: gang_sheet_data was lost during update!");
-                console.error("  Existing data before update:", existingGangSheetData ? "present" : "null");
+              if (!updatedHasData) {
+                console.error("ERROR: gang_sheet_data is still NULL after update!");
+                console.error("  Data we tried to save:", dataToSave ? "present" : "null");
               }
+            } else {
+              console.error("ERROR: Update query returned 0 rows!");
             }
           }
         }
         
         // Only create new order if we didn't successfully update a pre-order
-        if (!result || result.rowCount === 0) {
-          // Build the query - include gang_sheet_data if it exists (for non-pre-orders)
+        if (!updatedPreOrder && (!result || result.rowCount === 0)) {
+          console.log("Creating new order (pre-order update failed or no pre-order)");
+          
+          // Build the query - ALWAYS include gang_sheet_data if we have it
           const hasGangSheetData = gangSheetData !== null;
-          const gangSheetDataJson = gangSheetData ? JSON.stringify(gangSheetData) : null;
+          console.log("Has gangSheetData for new order:", hasGangSheetData);
           
           const query = hasGangSheetData
             ? `INSERT INTO dtf_orders
                  (mode, size, quantity, transfer_name, garment_color, notes,
                   files, unit_price_cents, total_price_cents, stripe_session_id, status, shipping_address, gang_sheet_data)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, $12)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, $12::jsonb)
                ON CONFLICT (stripe_session_id) 
                DO UPDATE SET 
                  shipping_address = COALESCE(EXCLUDED.shipping_address, dtf_orders.shipping_address),
@@ -306,7 +320,7 @@ module.exports = (req, res) => {
                 totalPriceCents,
                 session.id,
                 finalShippingAddressJson,
-                gangSheetDataJson,
+                gangSheetData, // Pass object directly with ::jsonb cast
               ]
             : [
                 mode,
@@ -323,21 +337,36 @@ module.exports = (req, res) => {
               ];
           
           result = await client.query(query, params);
+          
+          if (result.rowCount > 0 && hasGangSheetData) {
+            const savedHasData = result.rows[0].gang_sheet_data !== null;
+            console.log("✓ Created new order. Has gang_sheet_data:", savedHasData);
+            if (!savedHasData) {
+              console.error("ERROR: gang_sheet_data was not saved to new order!");
+            }
+          }
         }
 
-        if (result.rowCount) {
+        if (result && result.rowCount > 0) {
           const savedAddress = result.rows[0].shipping_address;
+          const savedGangSheetData = result.rows[0].gang_sheet_data;
           console.log(
             "✓ Inserted/updated dtf_orders row for Stripe session",
             session.id,
             "with shipping_address:",
-            savedAddress ? "yes" : "no"
+            savedAddress ? "yes" : "no",
+            "with gang_sheet_data:",
+            savedGangSheetData ? "yes" : "NO - NULL!"
           );
           if (!savedAddress && finalShippingAddressJson) {
             console.error("WARNING: Shipping address was extracted but not saved!");
           }
+          if (!savedGangSheetData && gangSheetData) {
+            console.error("ERROR: gang_sheet_data was provided but not saved!");
+            console.error("  This is a critical error - order data is incomplete!");
+          }
         } else {
-          console.log("No row affected for session:", session.id);
+          console.error("ERROR: No row affected for session:", session.id);
         }
       } catch (err) {
         console.error("Failed to insert dtf_orders row from Stripe webhook:", err);
