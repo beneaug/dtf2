@@ -17,6 +17,11 @@ export function create(container) {
     <div class="gang-canvas-wrapper">
       <div class="gang-canvas-container" id="gang-canvas-container">
         <canvas id="gang-canvas"></canvas>
+        <div class="gang-zoom-controls">
+          <button class="gang-zoom-btn" id="gang-zoom-out" aria-label="Zoom out">−</button>
+          <span class="gang-zoom-level" id="gang-zoom-level">150%</span>
+          <button class="gang-zoom-btn" id="gang-zoom-in" aria-label="Zoom in">+</button>
+        </div>
       </div>
     </div>
   `;
@@ -25,10 +30,16 @@ export function create(container) {
   const canvasContainer = container.querySelector("#gang-canvas-container");
   const canvas = container.querySelector("#gang-canvas");
   const ctx = canvas.getContext("2d");
+  const zoomOutBtn = container.querySelector("#gang-zoom-out");
+  const zoomInBtn = container.querySelector("#gang-zoom-in");
+  const zoomLevelDisplay = container.querySelector("#gang-zoom-level");
   
   // Track sheet size to detect changes and scroll to top
   const initialState = store.getState();
   let lastSheetSizeId = initialState.selectedSheetSizeId;
+  
+  // Zoom state (1.0 = 100%, 1.5 = 150%, etc.)
+  let zoomLevel = 1.5; // Start at 150% for larger preview
 
   let isDragging = false;
   let dragStartX = 0;
@@ -138,22 +149,13 @@ export function create(container) {
     const containerW = containerWidth || canvasWidth;
     const containerH = containerHeight || canvasHeight;
     
+    // Calculate base scale to fit in container
     const fitScaleX = (containerW * 0.95) / baseSheetWidthPx;
     const fitScaleY = (containerH * 0.95) / baseSheetHeightPx;
-    let scale = Math.min(fitScaleX, fitScaleY);
+    const baseScale = Math.min(fitScaleX, fitScaleY);
     
-    // Ensure minimum size for preview
-    const MIN_SHEET_WIDTH = 650; // Minimum width in pixels for large preview
-    const MIN_SHEET_HEIGHT = 400; // Minimum height in pixels
-    
-    // Calculate scale needed to reach minimum dimensions
-    const minScaleX = MIN_SHEET_WIDTH / baseSheetWidthPx;
-    const minScaleY = MIN_SHEET_HEIGHT / baseSheetHeightPx;
-    const minScale = Math.max(minScaleX, minScaleY);
-    
-    // Use the larger of fit scale or minimum scale
-    // This ensures the sheet is at least the minimum size, but fits in container if container is larger
-    scale = Math.max(scale, minScale);
+    // Apply zoom level
+    const scale = baseScale * zoomLevel;
 
     const sheetWidthPx = baseSheetWidthPx * scale;
     const sheetHeightPx = baseSheetHeightPx * scale;
@@ -479,6 +481,29 @@ export function create(container) {
     isDragging = false;
     dragInstanceId = null;
   });
+
+  // Zoom controls
+  function updateZoomDisplay() {
+    zoomLevelDisplay.textContent = Math.round(zoomLevel * 100) + "%";
+  }
+
+  function setZoom(level) {
+    // Clamp zoom between 0.25x (25%) and 4x (400%)
+    zoomLevel = Math.max(0.25, Math.min(4.0, level));
+    updateZoomDisplay();
+    render();
+  }
+
+  zoomOutBtn.addEventListener("click", () => {
+    setZoom(zoomLevel - 0.25);
+  });
+
+  zoomInBtn.addEventListener("click", () => {
+    setZoom(zoomLevel + 0.25);
+  });
+
+  // Initialize zoom display
+  updateZoomDisplay();
 
   // Subscribe to state changes
   store.subscribe((state) => {
