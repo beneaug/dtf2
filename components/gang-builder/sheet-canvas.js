@@ -97,8 +97,8 @@ export function create(container) {
     
     // Use a fixed minimum target size for the sheet (ensures large preview)
     // This makes the sheet always render at a large size, may overflow canvas
-    const MIN_SHEET_WIDTH = 1400; // Minimum width in pixels for large preview
-    const MIN_SHEET_HEIGHT = 800; // Minimum height in pixels
+    const MIN_SHEET_WIDTH = 1000; // Minimum width in pixels for large preview
+    const MIN_SHEET_HEIGHT = 600; // Minimum height in pixels
     
     // Calculate scale to reach minimum size
     const scaleForMinWidth = MIN_SHEET_WIDTH / baseSheetWidthPx;
