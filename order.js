@@ -257,12 +257,18 @@ document.addEventListener("DOMContentLoaded", () => {
   updatePricingDisplay();
 
   // Mode tabs – just cosmetic for now, but we record the choice.
+  // Note: "Build sheet" tab is handled by gang-builder-init.js
   let currentMode = "single-image";
   tabs.forEach((tab) => {
+    const tabText = (tab.textContent || "").trim().toLowerCase();
+    // Skip "build sheet" tab - it's handled by the gang builder module
+    if (tabText === "build sheet") {
+      return;
+    }
     tab.addEventListener("click", () => {
       tabs.forEach((t) => t.classList.remove("order-tab--active"));
       tab.classList.add("order-tab--active");
-      currentMode = (tab.textContent || "").trim().toLowerCase().replace(/\s+/g, "-");
+      currentMode = tabText.replace(/\s+/g, "-");
     });
   });
 
