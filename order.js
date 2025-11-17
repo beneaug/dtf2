@@ -153,19 +153,18 @@ document.addEventListener("DOMContentLoaded", () => {
     
     if (!naturalW || !naturalH) return;
 
-    // Display at true 1:1 scale - actual pixel dimensions (1 CSS pixel = 1 image pixel)
-    // For very large images, allow them to display at full size with scrolling
-    // Only scale down if image is extremely large (larger than typical monitor resolution)
-    const maxDisplaySize = 4000; // Allow most artwork to display at true 1:1 scale
+    // Display images at a reasonable preview size while maintaining aspect ratio
+    // Scale to fit within a maximum dimension for comfortable viewing
+    const maxDisplaySize = 600; // Maximum dimension for preview (reasonable for monitor viewing)
     const maxDimension = Math.max(naturalW, naturalH);
     
     if (maxDimension > maxDisplaySize) {
-      // Scale down proportionally only for extremely large images
+      // Scale down proportionally to fit within max size
       const scale = maxDisplaySize / maxDimension;
       img.style.width = `${naturalW * scale}px`;
       img.style.height = `${naturalH * scale}px`;
     } else {
-      // Display at true 1:1 scale - actual pixel dimensions
+      // Display at actual pixel size if image is already small enough
       img.style.width = `${naturalW}px`;
       img.style.height = `${naturalH}px`;
     }
