@@ -142,29 +142,33 @@ document.addEventListener("DOMContentLoaded", () => {
     if (totalSummaryEl) totalSummaryEl.textContent = formatPrice(total);
   }
 
-  // Artwork preview in the upload area
+  // Artwork preview in the upload area - display at 1:1 scale (1 CSS pixel = 1 image pixel)
   function applyPreviewSizing() {
     if (!previewEl) return;
     const img = previewEl.querySelector("img");
     if (!img) return;
 
-    const label = (sizeSelect && sizeSelect.value) || '2" x 2"';
-    // Map size labels to a base pixel dimension so sizes feel 1:1 relative.
-    const baseSideMap = {
-      '2" x 2"': 80,
-      '4" x 4"': 140,
-      '6" x 6"': 200,
-      "Custom sheet": 220,
-    };
-    const baseSide = baseSideMap[label] || 120;
+    const naturalW = img.naturalWidth;
+    const naturalH = img.naturalHeight;
+    
+    if (!naturalW || !naturalH) return;
 
-    const naturalW = img.naturalWidth || baseSide;
-    const naturalH = img.naturalHeight || baseSide;
-    const maxSide = Math.max(naturalW, naturalH);
-    const scale = baseSide / maxSide;
-
-    img.style.width = `${naturalW * scale}px`;
-    img.style.height = `${naturalH * scale}px`;
+    // Display at true 1:1 scale - actual pixel dimensions (1 CSS pixel = 1 image pixel)
+    // For very large images, allow them to display at full size with scrolling
+    // Only scale down if image is extremely large (larger than typical monitor resolution)
+    const maxDisplaySize = 4000; // Allow most artwork to display at true 1:1 scale
+    const maxDimension = Math.max(naturalW, naturalH);
+    
+    if (maxDimension > maxDisplaySize) {
+      // Scale down proportionally only for extremely large images
+      const scale = maxDisplaySize / maxDimension;
+      img.style.width = `${naturalW * scale}px`;
+      img.style.height = `${naturalH * scale}px`;
+    } else {
+      // Display at true 1:1 scale - actual pixel dimensions
+      img.style.width = `${naturalW}px`;
+      img.style.height = `${naturalH}px`;
+    }
   }
 
   if (uploadInput && previewEl) {

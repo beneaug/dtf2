@@ -378,6 +378,8 @@ body {
   display: none; /* toggled on when a file is present */
   align-items: center;
   justify-content: center;
+  overflow: auto; /* Allow scrolling for large 1:1 scale images */
+  max-height: 80vh; /* Prevent extremely tall images from breaking layout */
 }
 
 .order-upload-preview img {
