@@ -256,15 +256,15 @@ document.addEventListener("DOMContentLoaded", () => {
         sheetMain.appendChild(sheetMainInner);
         transferSheet.appendChild(sheetMain);
         
-        // Shadow layer under the peeling corner
+        // Shadow layer
         const shadow = document.createElement("div");
         shadow.className = "dtf-sheet-shadow";
         const shadowInner = document.createElement("div");
-        shadowInner.className = "dtf-sheet-shadow-inner";
+        shadowInner.className = "dtf-flap-inner";
         shadow.appendChild(shadowInner);
         transferSheet.appendChild(shadow);
         
-        // Flap layer (the curling 3D corner with backside visible)
+        // Flap layer (the curling corner)
         const sheetFlap = document.createElement("div");
         sheetFlap.className = "dtf-sheet-flap";
         const flapLighting = document.createElement("div");

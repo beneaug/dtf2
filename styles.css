@@ -388,35 +388,13 @@ body {
 
 /* === DTF Transfer Effect === */
 :root {
-  /* CONFIGURATION */
+  /* CONFIGURATION - matching original sticker code */
   --sticker-rotate: 0deg;
-  
-  /** Padding to prevent clipping **/
-  --sticker-p: 20px;
-  --sticker-peelback-hover: 28%;
-  --sticker-peelback-active: 55%;
-  
-  --sticker-peel-easing: 2s
-    linear(
-      0, 0.002 0.4%, 0.008 0.9%, 0.02 1.4%, 0.035 1.9%, 0.055 2.4%,
-      0.083 3%, 0.11 3.5%, 0.146 4.1%, 0.214 5.1%, 0.297 6.2%,
-      0.624 10.2%, 0.756 11.9%, 0.821 12.8%, 0.874 13.6%, 0.93 14.5%,
-      0.975 15.3%, 1.016 16.1%, 1.053 16.9%, 1.085 17.7%, 1.116 18.6%,
-      1.139 19.4%, 1.16 20.3%, 1.176 21.2%, 1.187 22.1%, 1.195 23.2%,
-      1.197 24.4%, 1.193 25.6%, 1.183 26.9%, 1.17 28.1%, 1.153 29.4%,
-      1.055 35.6%, 1.031 37.3%, 1.012 38.8%, 0.994 40.6%, 0.98 42.3%,
-      0.97 44.1%, 0.964 45.9%, 0.961 48.3%, 0.964 51.1%, 0.97 53.7%,
-      0.997 62.7%, 1.003 66%, 1.007 69.3%, 1.007 74.4%, 1 89.2%, 1
-    );
-  --sticker-peel-hover-easing: 1s
-    linear(
-      0, 0.008 1.1%, 0.031 2.2%, 0.129 4.8%, 0.257 7.2%,
-      0.671 14.2%, 0.789 16.5%, 0.881 18.6%, 0.957 20.7%,
-      1.019 22.9%, 1.063 25.1%, 1.094 27.4%, 1.114 30.7%,
-      1.112 34.5%, 1.018 49.9%, 0.99 59.1%, 1
-    );
-  
-  /* HELPERS */
+  --sticker-p: 15px;
+  --sticker-peelback-hover: 25%;
+  --sticker-peelback-active: 50%;
+  --sticker-peel-easing: 2s linear(0, 0.002 0.4%, 0.008 0.9%, 0.02 1.4%, 0.035 1.9%, 0.055 2.4%, 0.083 3%, 0.11 3.5%, 0.146 4.1%, 0.214 5.1%, 0.297 6.2%, 0.624 10.2%, 0.756 11.9%, 0.821 12.8%, 0.874 13.6%, 0.93 14.5%, 0.975 15.3%, 1.016 16.1%, 1.053 16.9%, 1.085 17.7%, 1.116 18.6%, 1.139 19.4%, 1.16 20.3%, 1.176 21.2%, 1.187 22.1%, 1.195 23.2%, 1.197 24.4%, 1.193 25.6%, 1.183 26.9%, 1.17 28.1%, 1.153 29.4%, 1.055 35.6%, 1.031 37.3%, 1.012 38.8%, 0.994 40.6%, 0.98 42.3%, 0.97 44.1%, 0.964 45.9%, 0.961 48.3%, 0.964 51.1%, 0.97 53.7%, 0.997 62.7%, 1.003 66%, 1.007 69.3%, 1.007 74.4%, 1 89.2%, 1);
+  --sticker-peel-hover-easing: 1s linear(0, 0.008 1.1%, 0.031 2.2%, 0.129 4.8%, 0.257 7.2%, 0.671 14.2%, 0.789 16.5%, 0.881 18.6%, 0.957 20.7%, 1.019 22.9%, 1.063 25.1%, 1.094 27.4%, 1.114 30.7%, 1.112 34.5%, 1.018 49.9%, 0.99 59.1%, 1);
   --sticker-start: calc(-1 * var(--sticker-p));
   --sticker-end: calc(100% + var(--sticker-p));
 }
@@ -424,7 +402,6 @@ body {
 .dtf-transfer-container {
   position: relative;
   cursor: grab;
-  display: inline-block;
 }
 
 .dtf-transfer-container:active {
@@ -438,7 +415,6 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Base artwork - stays in place */
 .dtf-artwork-base {
   position: relative;
   display: inline-block;
@@ -453,7 +429,6 @@ body {
   transform: rotate(var(--sticker-rotate));
 }
 
-/* Transfer sheet container */
 .dtf-transfer-sheet {
   position: absolute;
   top: 0;
@@ -463,7 +438,7 @@ body {
   pointer-events: none;
 }
 
-/* Main sheet - clips away as corner peels */
+/* Main sheet with corner cutout */
 .dtf-sheet-main {
   clip-path: polygon(
     var(--sticker-start) var(--sticker-start),
@@ -481,11 +456,12 @@ body {
   left: calc(-1 * var(--sticker-p));
   width: calc(100% + 2 * var(--sticker-p));
   height: calc(100% + 2 * var(--sticker-p));
-  background: rgba(179, 179, 179, 0.4);
+  background: rgba(179, 179, 179, 0.42);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
 }
 
+/* Hover state - cut diagonal corner from top-right */
 .dtf-transfer-container:hover .dtf-sheet-main {
   clip-path: polygon(
     var(--sticker-start) var(--sticker-start),
@@ -497,6 +473,7 @@ body {
   transition: clip-path var(--sticker-peel-hover-easing);
 }
 
+/* Active state - larger diagonal cut */
 .dtf-transfer-container:active .dtf-sheet-main {
   clip-path: polygon(
     var(--sticker-start) var(--sticker-start),
@@ -508,7 +485,7 @@ body {
   transition: clip-path var(--sticker-peel-easing);
 }
 
-/* Shadow under flap */
+/* Shadow layer */
 .dtf-sheet-shadow {
   position: absolute;
   top: 1rem;
@@ -519,33 +496,29 @@ body {
   opacity: 0.4;
 }
 
-.dtf-sheet-shadow-inner {
+.dtf-sheet-shadow .dtf-flap-inner {
   position: absolute;
   top: calc(-1 * var(--sticker-p));
   left: calc(-1 * var(--sticker-p));
   width: calc(100% + 2 * var(--sticker-p));
   height: calc(100% + 2 * var(--sticker-p));
-  background: rgba(179, 179, 179, 0.4);
+  background: rgba(179, 179, 179, 0.42);
 }
 
-/* Curling flap */
+/* Flap - the peeled corner */
 .dtf-sheet-flap {
   position: absolute;
   width: 100%;
   height: 100%;
   left: 0;
   top: calc(-100% - var(--sticker-p) - var(--sticker-p));
-  
   clip-path: polygon(
     var(--sticker-end) var(--sticker-start),
     var(--sticker-end) var(--sticker-start),
     var(--sticker-end) var(--sticker-start),
     var(--sticker-end) var(--sticker-start)
   );
-  
   transform: scaleY(-1);
-  transform-origin: top right;
-  perspective: 1000px;
   transition: all var(--sticker-peel-hover-easing);
 }
 
