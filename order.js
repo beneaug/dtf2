@@ -142,7 +142,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (totalSummaryEl) totalSummaryEl.textContent = formatPrice(total);
   }
 
-  // Artwork preview in the upload area - scale based on selected transfer size
+  // Artwork preview in the upload area - display at true 1:1 scale (1 CSS pixel = 1 image pixel)
   function applyPreviewSizing() {
     if (!previewEl) return;
     const img = previewEl.querySelector("img");
@@ -153,47 +153,21 @@ document.addEventListener("DOMContentLoaded", () => {
     
     if (!naturalW || !naturalH) return;
 
-    // Get the selected size to determine appropriate preview scale
-    const label = (sizeSelect && sizeSelect.value) || '2" x 2"';
-    
-    // Map transfer sizes to reasonable preview dimensions (in pixels)
-    // Smaller transfers get smaller previews, larger transfers get larger previews
-    const sizePreviewMap = {
-      '2" x 2"': 120,
-      '4" x 2"': 160,
-      '3" x 3"': 150,
-      '5" x 3"': 200,
-      '4" x 4"': 180,
-      '5" x 5"': 220,
-      '6" x 6"': 260,
-      '7" x 7"': 300,
-      '11" x 5"': 320,
-      '8" x 8"': 340,
-      '9" x 9"': 380,
-      '9" x 11"': 400,
-      '10" x 10"': 420,
-      '11" x 11"': 460,
-      '11" x 14"': 500,
-      '12" x 17"': 580,
-      '12" x 22"': 600,
-    };
-    
-    // Use the larger dimension of the transfer size for preview scaling
-    const match = label.match(/(\d+(?:\.\d+)?)"\s*x\s*(\d+(?:\.\d+)?)"/);
-    let maxPreviewSize = sizePreviewMap[label] || 200; // default fallback
-    
-    // If we can't find a match, try to calculate from the size string
-    if (!match && !sizePreviewMap[label]) {
-      // Fallback: use a reasonable default based on common sizes
-      maxPreviewSize = 200;
-    }
-    
-    // Scale image to fit within the preview size while maintaining aspect ratio
+    // Display at true 1:1 scale - actual pixel dimensions
+    // Only constrain if image is extremely large to prevent layout issues
+    const maxDisplaySize = 2000; // Allow most images to display at true 1:1 scale
     const maxDimension = Math.max(naturalW, naturalH);
-    const scale = maxPreviewSize / maxDimension;
     
-    img.style.width = `${naturalW * scale}px`;
-    img.style.height = `${naturalH * scale}px`;
+    if (maxDimension > maxDisplaySize) {
+      // Only scale down if image is extremely large
+      const scale = maxDisplaySize / maxDimension;
+      img.style.width = `${naturalW * scale}px`;
+      img.style.height = `${naturalH * scale}px`;
+    } else {
+      // Display at true 1:1 scale - actual pixel dimensions
+      img.style.width = `${naturalW}px`;
+      img.style.height = `${naturalH}px`;
+    }
   }
 
   if (uploadInput && previewEl) {
