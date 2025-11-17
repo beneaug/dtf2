@@ -140,30 +140,42 @@ export function create(container) {
     zoomLevel = defaultZoom;
     updateZoomDisplay();
     
-    // Clear canvas container inline styles to allow natural sizing
+    // COMPLETELY RESET canvas and container - clear all inline styles
     canvasContainer.style.width = '';
     canvasContainer.style.height = '';
+    canvas.style.width = '';
+    canvas.style.height = '';
     
     // Force a layout recalculation by reading layout properties
     void canvasWrapper.offsetHeight;
+    void canvasContainer.offsetHeight;
     
-    // Wait for DOM to settle, then get fresh dimensions and resize
+    // Wait for DOM to settle, then get FRESH dimensions and resize
     pendingResizeFrame = requestAnimationFrame(() => {
       pendingResizeFrame = requestAnimationFrame(() => {
         pendingResizeFrame = null;
         
-        // Get fresh container dimensions from the wrapper
+        // ALWAYS get fresh container dimensions from the wrapper - NEVER use cached
         const wrapperRect = canvasWrapper.getBoundingClientRect();
         if (wrapperRect.width > 0 && wrapperRect.height > 0) {
           // Use wrapper dimensions minus padding for container
-          containerWidth = wrapperRect.width - 64; // Account for padding (2rem * 2 = 64px)
-          containerHeight = wrapperRect.height - 64;
+          // ALWAYS recalculate - never trust cached values
+          containerWidth = Math.max(100, wrapperRect.width - 64); // Account for padding, min 100px
+          containerHeight = Math.max(100, wrapperRect.height - 64);
         } else {
-          // Fallback: get from canvasContainer
-          const rect = canvasContainer.getBoundingClientRect();
-          if (rect.width > 0 && rect.height > 0) {
-            containerWidth = rect.width;
-            containerHeight = rect.height;
+          // Fallback: get from center panel
+          const centerPanel = container.closest(".gang-builder-center");
+          if (centerPanel) {
+            const centerRect = centerPanel.getBoundingClientRect();
+            containerWidth = Math.max(100, centerRect.width - 64);
+            containerHeight = Math.max(100, centerRect.height - 64);
+          } else {
+            // Last resort: use canvasContainer
+            const rect = canvasContainer.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+              containerWidth = Math.max(100, rect.width);
+              containerHeight = Math.max(100, rect.height);
+            }
           }
         }
         
@@ -198,20 +210,26 @@ export function create(container) {
     // Prevent recursive calls
     if (isResizing) return;
     
-    // Get container dimensions - use stored values or measure from wrapper
-    let actualWidth = containerWidth;
-    let actualHeight = containerHeight;
+    // ALWAYS get fresh container dimensions - NEVER trust cached values
+    let actualWidth = 0;
+    let actualHeight = 0;
     
-    // If dimensions are invalid, get fresh measurements
-    if (actualWidth <= 0 || actualHeight <= 0) {
-      const wrapperRect = canvasWrapper.getBoundingClientRect();
-      if (wrapperRect.width > 0 && wrapperRect.height > 0) {
-        actualWidth = wrapperRect.width - 64; // Account for padding
-        actualHeight = wrapperRect.height - 64;
+    const wrapperRect = canvasWrapper.getBoundingClientRect();
+    if (wrapperRect.width > 0 && wrapperRect.height > 0) {
+      actualWidth = Math.max(100, wrapperRect.width - 64); // Account for padding, min 100px
+      actualHeight = Math.max(100, wrapperRect.height - 64);
+    } else {
+      // Fallback: get from center panel
+      const centerPanel = container.closest(".gang-builder-center");
+      if (centerPanel) {
+        const centerRect = centerPanel.getBoundingClientRect();
+        actualWidth = Math.max(100, centerRect.width - 64);
+        actualHeight = Math.max(100, centerRect.height - 64);
       } else {
+        // Last resort: use canvasContainer
         const rect = canvasContainer.getBoundingClientRect();
-        actualWidth = rect.width;
-        actualHeight = rect.height;
+        actualWidth = Math.max(100, rect.width);
+        actualHeight = Math.max(100, rect.height);
       }
     }
     
@@ -219,7 +237,7 @@ export function create(container) {
     if (actualWidth > 0 && actualHeight > 0) {
       isResizing = true;
       
-      // Store container dimensions
+      // Store container dimensions (for reference, but we'll always remeasure)
       containerWidth = actualWidth;
       containerHeight = actualHeight;
       
@@ -234,8 +252,8 @@ export function create(container) {
         const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
         
         // Calculate base scale to fit in container (with some padding)
-        const fitScaleX = (containerWidth * 0.95) / baseSheetWidthPx;
-        const fitScaleY = (containerHeight * 0.95) / baseSheetHeightPx;
+        const fitScaleX = (actualWidth * 0.95) / baseSheetWidthPx;
+        const fitScaleY = (actualHeight * 0.95) / baseSheetHeightPx;
         const baseScale = Math.min(fitScaleX, fitScaleY);
         
         // Apply zoom level - use current zoomLevel value directly, no accumulation
@@ -246,8 +264,11 @@ export function create(container) {
         
         const paddingPx = 32;
         // Canvas needs to be large enough for the zoomed sheet
-        const neededWidth = Math.max(containerWidth, sheetWidthPx + paddingPx * 2);
-        const neededHeight = Math.max(containerHeight, sheetHeightPx + paddingPx * 2);
+        // BUT: cap it to prevent it from becoming absurdly large
+        const maxCanvasWidth = actualWidth * 10; // Cap at 10x container width
+        const maxCanvasHeight = actualHeight * 10; // Cap at 10x container height
+        const neededWidth = Math.min(maxCanvasWidth, Math.max(actualWidth, sheetWidthPx + paddingPx * 2));
+        const neededHeight = Math.min(maxCanvasHeight, Math.max(actualHeight, sheetHeightPx + paddingPx * 2));
         
         // Set canvas size
         canvas.width = neededWidth * dpr;
@@ -260,12 +281,12 @@ export function create(container) {
         canvasContainer.style.height = neededHeight + 'px';
       } else {
         // No sheet size selected, use container size
-        canvas.width = containerWidth * dpr;
-        canvas.height = containerHeight * dpr;
-        canvas.style.width = containerWidth + 'px';
-        canvas.style.height = containerHeight + 'px';
-        canvasContainer.style.width = containerWidth + 'px';
-        canvasContainer.style.height = containerHeight + 'px';
+        canvas.width = actualWidth * dpr;
+        canvas.height = actualHeight * dpr;
+        canvas.style.width = actualWidth + 'px';
+        canvas.style.height = actualHeight + 'px';
+        canvasContainer.style.width = actualWidth + 'px';
+        canvasContainer.style.height = actualHeight + 'px';
       }
       
       // Reset transform and scale the context to match DPR
