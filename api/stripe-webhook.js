@@ -84,9 +84,12 @@ module.exports = (req, res) => {
       const orderId = m.orderId ? parseInt(m.orderId, 10) : null;
       let existingOrder = null;
       
-      console.log("Processing webhook for session:", session.id);
+      console.log("=== WEBHOOK PROCESSING ===");
+      console.log("Session ID:", session.id);
+      console.log("Full metadata:", JSON.stringify(m, null, 2));
       console.log("Metadata orderId:", m.orderId, "parsed:", orderId);
       console.log("Metadata mode:", m.mode);
+      console.log("All metadata keys:", Object.keys(m || {}));
       
       if (orderId) {
         console.log("Looking for order by ID:", orderId);
@@ -129,7 +132,41 @@ module.exports = (req, res) => {
       }
       
       if (!existingOrder) {
-        console.log("No existing order found - will create new one (fallback for orders created before this update)");
+        console.warn("WARNING: No existing order found!");
+        console.warn("  This should NOT happen for gang-sheet orders created after the update");
+        console.warn("  Will create new order (this will result in duplicate if orderId was missing from metadata)");
+        
+        // Last resort: Try to find by pending session_id pattern if mode is gang-sheet
+        if (m.mode === 'gang-sheet') {
+          console.log("Attempting fallback: searching for pending orders with gang_sheet_data");
+          try {
+            const fallbackClient = await pool.connect();
+            try {
+              const fallbackResult = await fallbackClient.query(
+                `SELECT id, gang_sheet_data, stripe_session_id, created_at
+                 FROM dtf_orders 
+                 WHERE stripe_session_id LIKE 'pending-%'
+                   AND gang_sheet_data IS NOT NULL
+                   AND mode = 'gang-sheet'
+                   AND created_at > NOW() - INTERVAL '15 minutes'
+                 ORDER BY created_at DESC
+                 LIMIT 1`,
+                []
+              );
+              
+              if (fallbackResult.rows.length > 0) {
+                existingOrder = fallbackResult.rows[0];
+                console.log("✓ Found pending order via fallback:", existingOrder.id);
+                console.log("  Created at:", existingOrder.created_at);
+                console.log("  Session_id:", existingOrder.stripe_session_id);
+              }
+            } finally {
+              fallbackClient.release();
+            }
+          } catch (fallbackErr) {
+            console.error("Fallback search failed:", fallbackErr);
+          }
+        }
       }
 
       // Extract shipping address from session

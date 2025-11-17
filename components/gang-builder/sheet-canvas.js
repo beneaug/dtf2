@@ -79,16 +79,32 @@ export function create(container) {
   // Preload an image and cache it
   function preloadImage(url) {
     if (imageCache.has(url)) {
-      return Promise.resolve(imageCache.get(url));
+      const cached = imageCache.get(url);
+      if (cached.complete && cached.naturalWidth > 0) {
+        return Promise.resolve(cached);
+      }
+      // If cached but not loaded yet, wait for it
+      return new Promise((resolve, reject) => {
+        cached.onload = () => resolve(cached);
+        cached.onerror = reject;
+        if (cached.complete) {
+          resolve(cached);
+        }
+      });
     }
 
     return new Promise((resolve, reject) => {
       const img = new Image();
+      img.crossOrigin = 'anonymous'; // Allow CORS for S3 images
       img.onload = () => {
         imageCache.set(url, img);
+        console.log('Image loaded and cached:', url.substring(0, 50) + '...');
         resolve(img);
       };
-      img.onerror = reject;
+      img.onerror = (err) => {
+        console.error('Failed to load image:', url, err);
+        reject(err);
+      };
       img.src = url;
     });
   }
@@ -335,24 +351,31 @@ export function create(container) {
       ctx.strokeRect(-boxWidthPx / 2, -boxHeightPx / 2, boxWidthPx, boxHeightPx);
 
       // Draw design image - centered at origin
-      if (design.url) {
+      if (design.url && !design.url.startsWith('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==')) {
         const cachedImg = imageCache.get(design.url);
         if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
           // Draw image centered (rotation is already applied to context)
           ctx.drawImage(cachedImg, -baseWidthPx / 2, -baseHeightPx / 2, baseWidthPx, baseHeightPx);
         } else {
           // Preload the image if not cached
-          preloadImage(design.url)
-            .then(() => {
-              // Re-render after image loads
-              render();
-            })
-            .catch(() => {
-              // Draw placeholder if image fails to load
-              ctx.fillStyle = "rgba(100, 100, 100, 0.3)";
-              ctx.fillRect(-baseWidthPx / 2, -baseHeightPx / 2, baseWidthPx, baseHeightPx);
-              render();
-            });
+          if (!imageCache.has(design.url)) {
+            preloadImage(design.url)
+              .then(() => {
+                // Re-render after image loads
+                render();
+              })
+              .catch((err) => {
+                console.warn('Failed to load image in render:', design.url, err);
+                // Draw placeholder if image fails to load
+                ctx.fillStyle = "rgba(100, 100, 100, 0.3)";
+                ctx.fillRect(-baseWidthPx / 2, -baseHeightPx / 2, baseWidthPx, baseHeightPx);
+                render();
+              });
+          } else {
+            // Image is being loaded, draw placeholder for now
+            ctx.fillStyle = "rgba(100, 100, 100, 0.2)";
+            ctx.fillRect(-baseWidthPx / 2, -baseHeightPx / 2, baseWidthPx, baseHeightPx);
+          }
         }
       }
       
@@ -625,15 +648,31 @@ export function create(container) {
       if (design.url && !imageCache.has(design.url)) {
         // Skip placeholder data URLs
         if (!design.url.startsWith('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==')) {
+          console.log('Canvas: Preloading image:', design.name || design.url.substring(0, 50));
           preloadImage(design.url)
-            .then(() => {
+            .then((img) => {
+              console.log('Canvas: Image preloaded successfully:', design.name || design.url.substring(0, 50), 'Size:', img.naturalWidth + 'x' + img.naturalHeight);
               // Re-render after image loads
               render();
             })
             .catch((err) => {
-              console.warn('Failed to preload image:', design.url, err);
-              // Silently fail - will show placeholder in render
+              console.warn('Canvas: Failed to preload image:', design.url, err);
+              // Still trigger render to show placeholder
+              render();
             });
+        }
+      } else if (design.url && imageCache.has(design.url)) {
+        // Image is already cached, check if it's loaded
+        const cached = imageCache.get(design.url);
+        if (cached.complete && cached.naturalWidth > 0) {
+          // Image is ready, ensure we render it
+          render();
+        } else if (!cached.complete) {
+          // Image is cached but not loaded yet, wait for it
+          cached.onload = () => {
+            console.log('Canvas: Cached image finished loading:', design.name || design.url.substring(0, 50));
+            render();
+          };
         }
       }
     });

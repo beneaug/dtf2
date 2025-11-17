@@ -170,8 +170,17 @@ module.exports = (req, res) => {
               if (gangSheetData && !savedGangSheetData) {
                 console.error("ERROR: gang_sheet_data was NOT saved but should have been!");
               }
+              
+              // CRITICAL: Ensure tempOrderId is set before creating Stripe session
+              if (!tempOrderId) {
+                console.error("CRITICAL ERROR: tempOrderId is not set! Cannot create Stripe session with orderId.");
+              }
             } else {
               console.error("ERROR: Order insert returned no rows");
+              // Don't continue if we can't create the order
+              res.statusCode = 500;
+              res.setHeader("Content-Type", "application/json");
+              return res.end(JSON.stringify({ error: "Failed to create order record." }));
             }
           } finally {
             client.release();
@@ -200,8 +209,16 @@ module.exports = (req, res) => {
         const origin = (req.headers.origin || "").replace(/\/$/, "");
         
         // Build metadata - include order ID so webhook can find and update it
+        // CRITICAL: tempOrderId MUST be set at this point
+        if (!tempOrderId) {
+          console.error("CRITICAL ERROR: tempOrderId is not set! Cannot proceed with Stripe checkout.");
+          res.statusCode = 500;
+          res.setHeader("Content-Type", "application/json");
+          return res.end(JSON.stringify({ error: "Failed to create order. Please try again." }));
+        }
+        
         const metadata = {
-          orderId: String(tempOrderId), // Primary identifier - always use order ID
+          orderId: String(tempOrderId), // Primary identifier - CRITICAL for webhook to find order
           mode,
           size,
           quantity: String(quantity),
@@ -215,7 +232,10 @@ module.exports = (req, res) => {
             totalPriceCents != null ? String(totalPriceCents) : "",
         };
         
-        // orderId is already in metadata above - that's all we need
+        console.log("Creating Stripe session with metadata:");
+        console.log("  orderId:", metadata.orderId);
+        console.log("  mode:", metadata.mode);
+        console.log("  All metadata keys:", Object.keys(metadata));
         
         const session = await stripe.checkout.sessions.create({
           mode: "payment",

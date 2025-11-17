@@ -580,28 +580,58 @@
           storeModule.setSheetSize(data.sheetSizeId);
           storeModule.setSheetQuantity(data.quantity);
           
-          // Add design files
+          // Add design files to store first
           designFilesWithUrls.forEach(file => {
             // Remove internal tracking property before adding to store
             const { _imageLoaded, ...fileForStore } = file;
             storeModule.addDesignFile(fileForStore);
           });
           
-          // Preload all images into the canvas component's cache before creating it
-          // We need to access the canvas component's preloadImage function
-          // Since we can't access it directly, we'll create the canvas first, then trigger image loading
-          
-          // Create the canvas component first
+          // Create the canvas component - it will subscribe to store and start loading images
           createCanvas(container);
           
-          // Now preload all images by accessing the store and triggering renders
-          // The canvas component will handle image loading via its preloadImage function
-          // We need to wait a bit for the canvas to initialize, then trigger a render
-          setTimeout(() => {
-            // Force a re-render by updating the store (this will trigger canvas render)
-            const currentState = storeModule.getState();
-            storeModule.setSheetSize(currentState.selectedSheetSizeId);
-          }, 100);
+          // Wait for canvas to initialize
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Force a render to trigger image preloading in the canvas component
+          const currentState = storeModule.getState();
+          storeModule.setSheetSize(currentState.selectedSheetSizeId);
+          
+          // Wait for images to start loading (canvas component's subscribe will trigger preloadImage)
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          // Preload all images explicitly to ensure they're ready
+          const imageLoadPromises = designFilesWithUrls
+            .filter(file => file.url && !file.url.startsWith('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='))
+            .map(async (file) => {
+              try {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                await new Promise((resolve, reject) => {
+                  img.onload = () => {
+                    console.log('Preloaded image for viewer:', file.name);
+                    resolve(img);
+                  };
+                  img.onerror = (err) => {
+                    console.warn('Failed to preload image:', file.name, err);
+                    resolve(null); // Continue even if image fails
+                  };
+                  img.src = file.url;
+                });
+              } catch (err) {
+                console.error('Error preloading image:', file.name, err);
+              }
+            });
+          
+          // Wait for all images to load (or fail)
+          await Promise.all(imageLoadPromises);
+          
+          // Give canvas component time to cache the images and trigger a re-render
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          // Force a final render to ensure images are displayed
+          const finalState = storeModule.getState();
+          storeModule.setSheetSize(finalState.selectedSheetSizeId);
           
           // Group instances by design, then add them using auto-pack and immediately update positions
           const instancesByDesign = {};
