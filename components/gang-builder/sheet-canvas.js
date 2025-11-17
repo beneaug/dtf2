@@ -185,10 +185,9 @@ export function create(container) {
       const baseWidthPx = convertInchesToPixels(instance.widthIn) * scale;
       const baseHeightPx = convertInchesToPixels(instance.heightIn) * scale;
       
-      // When rotated 90 degrees, swap width and height for the bounding box
-      const isRotated = instance.rotationDeg === 90;
-      const boxWidthPx = (isRotated ? baseHeightPx : baseWidthPx) + (deadspacePx * 2);
-      const boxHeightPx = (isRotated ? baseWidthPx : baseHeightPx) + (deadspacePx * 2);
+      // Bounding box dimensions (always include deadspace, dimensions don't swap - rotation handles visual appearance)
+      const boxWidthPx = baseWidthPx + (deadspacePx * 2);
+      const boxHeightPx = baseHeightPx + (deadspacePx * 2);
       
       // Calculate center point of the bounding box
       // The instance.xIn and instance.yIn represent the top-left of the graphic (before rotation)

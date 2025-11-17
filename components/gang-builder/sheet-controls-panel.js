@@ -355,15 +355,17 @@ export function create(container) {
         const designHeightIn = design.heightIn || design.naturalHeightPx / 300;
         
         // Calculate max instances using the auto-pack algorithm
+        // Use a very large quantity to find the actual maximum
         const result = autoPackDesign({
           sheetWidthIn: sheetSize.widthIn,
           sheetHeightIn: sheetSize.heightIn,
           designWidthIn,
           designHeightIn,
-          quantity: 9999, // Use large number to get max
+          quantity: 10000, // Use very large number to get actual max
           tryRotated: true,
         });
         
+        // The maxInstances returned is the actual maximum that can fit
         maxInstancesMap.set(design.id, result.maxInstances);
       });
     }
