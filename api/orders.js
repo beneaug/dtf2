@@ -78,6 +78,16 @@ module.exports = (req, res) => {
       const transferName = fields.transferName || null;
       const garmentColor = fields.garmentColor || null;
       const notes = fields.notes || null;
+      
+      // Extract gang sheet data if present
+      let gangSheetData = null;
+      if (fields.gangSheetData) {
+        try {
+          gangSheetData = JSON.parse(fields.gangSheetData);
+        } catch (e) {
+          console.error("Failed to parse gangSheetData:", e);
+        }
+      }
 
       const unitPrice = fields.unitPrice ? parseFloat(fields.unitPrice) : null;
       const totalPrice = fields.totalPrice
@@ -129,6 +139,7 @@ module.exports = (req, res) => {
               unitPriceCents != null ? String(unitPriceCents) : "",
             totalPriceCents:
               totalPriceCents != null ? String(totalPriceCents) : "",
+            ...(gangSheetData ? { gangSheetData: JSON.stringify(gangSheetData) } : {}),
           },
           success_url:
             process.env.STRIPE_SUCCESS_URL ||

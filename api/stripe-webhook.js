@@ -78,6 +78,16 @@ module.exports = (req, res) => {
         m.unitPriceCents != null ? parseInt(m.unitPriceCents, 10) : null;
       const totalPriceCents =
         m.totalPriceCents != null ? parseInt(m.totalPriceCents, 10) : null;
+      
+      // Extract gang sheet data if present
+      let gangSheetData = null;
+      if (m.gangSheetData) {
+        try {
+          gangSheetData = JSON.parse(m.gangSheetData);
+        } catch (e) {
+          console.error("Failed to parse gangSheetData from metadata:", e);
+        }
+      }
 
       // Extract shipping address from session
       // Always retrieve full session to ensure we have shipping details
@@ -182,30 +192,61 @@ module.exports = (req, res) => {
         
         const finalShippingAddressJson = shippingAddress ? JSON.stringify(shippingAddress) : null;
         
-        const result = await client.query(
-          `INSERT INTO dtf_orders
-             (mode, size, quantity, transfer_name, garment_color, notes,
-              files, unit_price_cents, total_price_cents, stripe_session_id, status, shipping_address)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11)
-           ON CONFLICT (stripe_session_id) 
-           DO UPDATE SET 
-             shipping_address = COALESCE(EXCLUDED.shipping_address, dtf_orders.shipping_address),
-             status = COALESCE(dtf_orders.status, EXCLUDED.status)
-           RETURNING id, shipping_address`,
-          [
-            m.mode || "single-image",
-            size,
-            quantity,
-            transferName,
-            garmentColor,
-            notes,
-            JSON.stringify(files),
-            unitPriceCents,
-            totalPriceCents,
-            session.id,
-            finalShippingAddressJson,
-          ]
-        );
+        // Build the query - include gang_sheet_data if it exists
+        const hasGangSheetData = gangSheetData !== null;
+        const gangSheetDataJson = gangSheetData ? JSON.stringify(gangSheetData) : null;
+        
+        const query = hasGangSheetData
+          ? `INSERT INTO dtf_orders
+               (mode, size, quantity, transfer_name, garment_color, notes,
+                files, unit_price_cents, total_price_cents, stripe_session_id, status, shipping_address, gang_sheet_data)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, $12)
+             ON CONFLICT (stripe_session_id) 
+             DO UPDATE SET 
+               shipping_address = COALESCE(EXCLUDED.shipping_address, dtf_orders.shipping_address),
+               status = COALESCE(dtf_orders.status, EXCLUDED.status),
+               gang_sheet_data = COALESCE(EXCLUDED.gang_sheet_data, dtf_orders.gang_sheet_data)
+             RETURNING id, shipping_address, gang_sheet_data`
+          : `INSERT INTO dtf_orders
+               (mode, size, quantity, transfer_name, garment_color, notes,
+                files, unit_price_cents, total_price_cents, stripe_session_id, status, shipping_address)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11)
+             ON CONFLICT (stripe_session_id) 
+             DO UPDATE SET 
+               shipping_address = COALESCE(EXCLUDED.shipping_address, dtf_orders.shipping_address),
+               status = COALESCE(dtf_orders.status, EXCLUDED.status)
+             RETURNING id, shipping_address`;
+        
+        const params = hasGangSheetData
+          ? [
+              m.mode || "single-image",
+              size,
+              quantity,
+              transferName,
+              garmentColor,
+              notes,
+              JSON.stringify(files),
+              unitPriceCents,
+              totalPriceCents,
+              session.id,
+              finalShippingAddressJson,
+              gangSheetDataJson,
+            ]
+          : [
+              m.mode || "single-image",
+              size,
+              quantity,
+              transferName,
+              garmentColor,
+              notes,
+              JSON.stringify(files),
+              unitPriceCents,
+              totalPriceCents,
+              session.id,
+              finalShippingAddressJson,
+            ];
+        
+        const result = await client.query(query, params);
 
         if (result.rowCount) {
           const savedAddress = result.rows[0].shipping_address;
