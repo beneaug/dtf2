@@ -51,13 +51,9 @@ export function create(container) {
         <h3 class="gang-controls-heading">Step 3: Layout</h3>
         <div class="gang-layout-controls">
           <div class="gang-layout-group">
-            <label class="gang-label">Auto-pack selected design:</label>
-            <div class="gang-auto-pack-controls">
-              <select id="gang-auto-pack-design" class="gang-select">
-                <option value="">Select a design...</option>
-              </select>
-              <input type="number" id="gang-auto-pack-qty" class="gang-input" min="1" value="1" placeholder="Qty" />
-              <button id="gang-auto-pack-btn" class="gang-btn gang-btn-secondary">Auto-pack</button>
+            <label class="gang-label">Auto-pack designs:</label>
+            <div class="gang-auto-pack-list" id="gang-auto-pack-list">
+              <p class="gang-empty-state">No designs uploaded yet</p>
             </div>
           </div>
           <div class="gang-layout-group">
@@ -124,8 +120,6 @@ export function create(container) {
     handleFiles(e.target.files);
   });
 
-  let lastUploadedDesignId = null;
-
   function handleFiles(files) {
     Array.from(files).forEach((file) => {
       if (file.type.startsWith("image/")) {
@@ -141,9 +135,6 @@ export function create(container) {
               naturalHeightPx: img.naturalHeight,
             };
             store.addDesignFile(designFile);
-            // Auto-select in Step 3 dropdown
-            lastUploadedDesignId = designFile.id;
-            // Update will happen in the subscribe callback
           };
           img.src = e.target.result;
         };
@@ -152,18 +143,39 @@ export function create(container) {
     });
   }
 
-  // Auto-pack controls
-  const autoPackDesignSelect = container.querySelector("#gang-auto-pack-design");
-  const autoPackQtyInput = container.querySelector("#gang-auto-pack-qty");
-  const autoPackBtn = container.querySelector("#gang-auto-pack-btn");
+  // Auto-pack controls - now using individual components per design
+  const autoPackList = container.querySelector("#gang-auto-pack-list");
   
-  autoPackBtn.addEventListener("click", () => {
-    const designId = autoPackDesignSelect.value;
-    const qty = parseInt(autoPackQtyInput.value, 10) || 1;
-    if (designId) {
-      store.addInstancesForDesign(designId, qty, true);
+  function updateAutoPackList(designFiles) {
+    autoPackList.innerHTML = "";
+    
+    if (designFiles.length === 0) {
+      autoPackList.innerHTML = '<p class="gang-empty-state">No designs uploaded yet</p>';
+      return;
     }
-  });
+    
+    designFiles.forEach((design) => {
+      const item = document.createElement("div");
+      item.className = "gang-auto-pack-item";
+      item.innerHTML = `
+        <div class="gang-auto-pack-label">${design.name}</div>
+        <div class="gang-auto-pack-controls">
+          <input type="number" class="gang-input gang-auto-pack-qty" data-design-id="${design.id}" min="1" value="1" placeholder="Qty" />
+          <button class="gang-btn gang-btn-secondary gang-auto-pack-btn" data-design-id="${design.id}">Auto-pack</button>
+        </div>
+      `;
+      
+      const qtyInput = item.querySelector(".gang-auto-pack-qty");
+      const packBtn = item.querySelector(".gang-auto-pack-btn");
+      
+      packBtn.addEventListener("click", () => {
+        const qty = parseInt(qtyInput.value, 10) || 1;
+        store.addInstancesForDesign(design.id, qty, true);
+      });
+      
+      autoPackList.appendChild(item);
+    });
+  }
 
   // Snap buttons
   const snapButtons = container.querySelectorAll(".gang-snap-btn");
@@ -303,12 +315,8 @@ export function create(container) {
       updateSizeControls(design);
     });
 
-    // Update auto-pack design select and auto-select last uploaded
-    updateAutoPackSelect(autoPackDesignSelect, state.designFiles);
-    if (lastUploadedDesignId && state.designFiles.find((d) => d.id === lastUploadedDesignId)) {
-      autoPackDesignSelect.value = lastUploadedDesignId;
-      lastUploadedDesignId = null; // Reset after selecting
-    }
+    // Update auto-pack list
+    updateAutoPackList(state.designFiles);
 
     // Update size controls if design still exists
     if (selectedDesignForSize) {
@@ -376,22 +384,6 @@ function updateDesignsList(container, designFiles, onSelectDesign) {
   });
 }
 
-function updateAutoPackSelect(select, designFiles) {
-  const currentValue = select.value;
-  select.innerHTML = '<option value="">Select a design...</option>';
-  
-  designFiles.forEach((design) => {
-    const option = document.createElement("option");
-    option.value = design.id;
-    option.textContent = design.name;
-    select.appendChild(option);
-  });
-  
-  // Restore selection if still valid
-  if (currentValue && designFiles.find((d) => d.id === currentValue)) {
-    select.value = currentValue;
-  }
-}
 
 function updatePricePreview(container, state) {
   const unitPrice = pricing.getUnitPrice(state.selectedSheetSizeId, state.sheetQuantity);

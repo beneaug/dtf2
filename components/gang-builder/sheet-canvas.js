@@ -177,21 +177,31 @@ export function create(container) {
       const design = state.designFiles.find((d) => d.id === instance.designId);
       if (!design) return;
 
+      // Add 4mm (0.157 inches) deadspace padding around the graphic
+      const deadspaceIn = 0.157; // 4mm in inches
+      const deadspacePx = convertInchesToPixels(deadspaceIn) * scale;
+      
       const x = offsetX + convertInchesToPixels(instance.xIn) * scale;
       const y = offsetY + convertInchesToPixels(instance.yIn) * scale;
       const width = convertInchesToPixels(instance.widthIn) * scale;
       const height = convertInchesToPixels(instance.heightIn) * scale;
+      
+      // Bounding box includes deadspace
+      const boxX = x - deadspacePx;
+      const boxY = y - deadspacePx;
+      const boxWidth = width + (deadspacePx * 2);
+      const boxHeight = height + (deadspacePx * 2);
 
       const isSelected = instance.id === state.selectedInstanceId;
 
-      // Draw instance background
+      // Draw instance background (with deadspace)
       ctx.fillStyle = isSelected ? "rgba(255, 255, 255, 0.15)" : "rgba(255, 255, 255, 0.08)";
-      ctx.fillRect(x, y, width, height);
+      ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
 
-      // Draw instance border
+      // Draw instance border (with deadspace)
       ctx.strokeStyle = isSelected ? "rgba(255, 255, 255, 0.6)" : "rgba(255, 255, 255, 0.3)";
       ctx.lineWidth = isSelected ? 2 : 1;
-      ctx.strokeRect(x, y, width, height);
+      ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
 
       // Draw design image (if loaded)
       if (design.url) {
@@ -221,11 +231,7 @@ export function create(container) {
         }
       }
 
-      // Draw instance label
-      ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
-      ctx.font = "10px system-ui";
-      ctx.textAlign = "left";
-      ctx.fillText(design.name.substring(0, 20), x + 4, y + 14);
+      // Filename text removed per user request
     });
 
     // Store render context for mouse events (use display dimensions)
@@ -245,20 +251,27 @@ export function create(container) {
     const ctx = canvas._renderContext;
     if (!ctx) return null;
 
-    const { offsetX, offsetY, scale, sheetSize } = ctx;
+    const { offsetX, offsetY, scale } = ctx;
+    const deadspaceIn = 0.157; // 4mm in inches
 
     // Convert mouse coords to inches
     const mouseXIn = convertPixelsToInches((mouseX - offsetX) / scale);
     const mouseYIn = convertPixelsToInches((mouseY - offsetY) / scale);
 
     // Find instance at point (check in reverse order for top-most)
+    // Account for deadspace padding in bounding box
     for (let i = state.instances.length - 1; i >= 0; i--) {
       const instance = state.instances[i];
+      const boxX = instance.xIn - deadspaceIn;
+      const boxY = instance.yIn - deadspaceIn;
+      const boxWidth = instance.widthIn + (deadspaceIn * 2);
+      const boxHeight = instance.heightIn + (deadspaceIn * 2);
+      
       if (
-        mouseXIn >= instance.xIn &&
-        mouseXIn <= instance.xIn + instance.widthIn &&
-        mouseYIn >= instance.yIn &&
-        mouseYIn <= instance.yIn + instance.heightIn
+        mouseXIn >= boxX &&
+        mouseXIn <= boxX + boxWidth &&
+        mouseYIn >= boxY &&
+        mouseYIn <= boxY + boxHeight
       ) {
         return instance;
       }
