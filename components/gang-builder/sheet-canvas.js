@@ -98,6 +98,39 @@ export function create(container) {
   let containerHeight = 0;
   let isResizing = false; // Prevent recursive resize calls
   
+  // Get maximum allowed zoom to prevent pushing right panel off screen
+  function getMaxZoom() {
+    const state = store.getState();
+    const sheetSize = getSheetSize(state.selectedSheetSizeId);
+    if (!sheetSize) return 4.0;
+    
+    // Get the center panel (which contains the canvas wrapper)
+    const centerPanel = container.closest(".gang-builder-center");
+    if (!centerPanel) return 4.0;
+    
+    const centerRect = centerPanel.getBoundingClientRect();
+    const maxAvailableWidth = centerRect.width - 64; // Account for padding
+    
+    // Calculate base sheet dimensions
+    const baseSheetWidthPx = convertInchesToPixels(sheetSize.widthIn);
+    
+    // Calculate maximum zoom that keeps canvas within center panel
+    // Canvas width = sheetWidthPx * scale + padding
+    // We want: sheetWidthPx * scale + padding <= maxAvailableWidth
+    // So: scale <= (maxAvailableWidth - padding) / sheetWidthPx
+    const paddingPx = 32;
+    const maxScale = (maxAvailableWidth - paddingPx * 2) / baseSheetWidthPx;
+    
+    // Get base scale (at 100% zoom)
+    const availableWidth = containerWidth || maxAvailableWidth;
+    const baseScale = (availableWidth * 0.95) / baseSheetWidthPx;
+    
+    // Max zoom = maxScale / baseScale
+    const maxZoom = Math.max(1.0, Math.min(4.0, maxScale / baseScale));
+    
+    return maxZoom;
+  }
+  
   // Calculate scale for current sheet size and zoom - SINGLE SOURCE OF TRUTH
   function calculateScale() {
     const state = store.getState();
@@ -107,7 +140,7 @@ export function create(container) {
     const baseSheetWidthPx = convertInchesToPixels(sheetSize.widthIn);
     const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
     
-    // Use actual container dimensions (freshly measured)
+    // Use actual container dimensions (freshly measured from wrapper, not canvas)
     const availableWidth = containerWidth || 100;
     const availableHeight = containerHeight || 100;
     
@@ -116,8 +149,10 @@ export function create(container) {
     const fitScaleY = (availableHeight * 0.95) / baseSheetHeightPx;
     const baseScale = Math.min(fitScaleX, fitScaleY);
     
-    // Apply zoom level
-    const scale = baseScale * zoomLevel;
+    // Apply zoom level (clamped to max zoom)
+    const maxZoom = getMaxZoom();
+    const clampedZoom = Math.min(zoomLevel, maxZoom);
+    const scale = baseScale * clampedZoom;
     
     const sheetWidthPx = baseSheetWidthPx * scale;
     const sheetHeightPx = baseSheetHeightPx * scale;
@@ -130,7 +165,8 @@ export function create(container) {
     // Prevent recursive calls
     if (isResizing) return;
     
-    // ALWAYS get fresh container dimensions from wrapper
+    // ALWAYS get fresh wrapper dimensions - this is our FIXED reference
+    // The wrapper size should NOT change when canvas size changes
     const wrapperRect = canvasWrapper.getBoundingClientRect();
     if (wrapperRect.width <= 0 || wrapperRect.height <= 0) {
       setTimeout(() => resizeCanvas(), 50);
@@ -140,10 +176,12 @@ export function create(container) {
     isResizing = true;
     
     // Calculate available container space (wrapper minus padding)
+    // This is FIXED and should never change based on canvas size
     const availableWidth = Math.max(100, wrapperRect.width - 64); // Account for 2rem padding
     const availableHeight = Math.max(100, wrapperRect.height - 64);
     
-    // Store container dimensions BEFORE calculating scale
+    // Store container dimensions - these are FIXED reference dimensions
+    // They represent the available space, NOT the canvas size
     containerWidth = availableWidth;
     containerHeight = availableHeight;
     
@@ -536,13 +574,24 @@ export function create(container) {
     // Prevent recursive calls
     if (isZooming) return;
     
-    // Clamp zoom between 0.25x (25%) and 4x (400%)
-    const newZoom = Math.max(0.25, Math.min(4.0, level));
+    // Get max allowed zoom to prevent pushing right panel off screen
+    const maxZoom = getMaxZoom();
+    
+    // Clamp zoom between 0.25x (25%) and maxZoom
+    const newZoom = Math.max(0.25, Math.min(maxZoom, level));
     if (Math.abs(newZoom - zoomLevel) < 0.001) return; // No significant change
     
     isZooming = true;
     zoomLevel = newZoom;
     updateZoomDisplay();
+    
+    // IMPORTANT: Ensure container dimensions are fresh before resizing
+    // Get wrapper dimensions directly (don't rely on cached containerWidth)
+    const wrapperRect = canvasWrapper.getBoundingClientRect();
+    if (wrapperRect.width > 0 && wrapperRect.height > 0) {
+      containerWidth = Math.max(100, wrapperRect.width - 64);
+      containerHeight = Math.max(100, wrapperRect.height - 64);
+    }
     
     // Resize canvas to accommodate new zoom level
     resizeCanvas();
