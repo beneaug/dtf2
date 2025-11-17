@@ -91,19 +91,16 @@ export function create(container) {
     // Clear canvas (use actual canvas dimensions)
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Calculate base dimensions at standard PPI
+    // Calculate base dimensions
     const baseSheetWidthPx = convertInchesToPixels(sheetSize.widthIn);
     const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
     
-    // Calculate what scale would fit the canvas
-    const fitScaleX = displayWidth / baseSheetWidthPx;
-    const fitScaleY = displayHeight / baseSheetHeightPx;
-    const fitScale = Math.min(fitScaleX, fitScaleY);
+    // Calculate scale to fit sheet to 95% of canvas (larger view, still prevents cutoff)
+    const scaleX = (displayWidth * 0.95) / baseSheetWidthPx;
+    const scaleY = (displayHeight * 0.95) / baseSheetHeightPx;
     
-    // Apply a fixed zoom multiplier to force larger view (2.5x = much larger)
-    // This will overflow the canvas but gives the close-up view requested
-    const ZOOM_MULTIPLIER = 2.5;
-    const scale = fitScale * ZOOM_MULTIPLIER;
+    // Use the smaller scale to ensure it fits both dimensions
+    const scale = Math.min(scaleX, scaleY);
 
     const sheetWidthPx = baseSheetWidthPx * scale;
     const sheetHeightPx = baseSheetHeightPx * scale;
