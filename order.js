@@ -23,11 +23,28 @@ document.addEventListener("DOMContentLoaded", () => {
     const params = new URLSearchParams(window.location.search);
     const isSuccess = params.get("success") === "1";
     const isCanceled = params.get("canceled") === "1";
+    const sessionId = params.get("session_id");
 
     if (isSuccess) {
       bannerEl.textContent =
         "Thanks — your DTF order is in the queue. You'll receive a Stripe receipt shortly.";
       bannerEl.classList.add("order-banner--success");
+      
+      // Update order with shipping address from Stripe session
+      if (sessionId) {
+        fetch(`/api/update-order-shipping?session_id=${encodeURIComponent(sessionId)}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.ok && data.shippingAddress) {
+              console.log("Shipping address updated successfully");
+            } else {
+              console.log("No shipping address found or already updated");
+            }
+          })
+          .catch(err => {
+            console.error("Failed to update shipping address:", err);
+          });
+      }
     } else if (isCanceled) {
       bannerEl.textContent =
         "Payment was canceled. No charge was made. You can update your details and try again.";

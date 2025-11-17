@@ -158,14 +158,43 @@ module.exports = (req, res) => {
         const shippingAddressJson = shippingAddress ? JSON.stringify(shippingAddress) : null;
         console.log("Attempting to insert order with shipping_address:", shippingAddressJson ? "present" : "null");
         
+        // If we don't have shipping address yet, try to get it one more time
+        if (!shippingAddress) {
+          console.log("Retrying shipping address retrieval...");
+          try {
+            const retrySession = await stripe.checkout.sessions.retrieve(session.id, {
+              expand: ["shipping_details", "customer_details"],
+            });
+            if (retrySession.shipping_details && retrySession.shipping_details.address) {
+              const addr = retrySession.shipping_details.address;
+              shippingAddress = {
+                name: retrySession.shipping_details.name || null,
+                line1: addr.line1 || null,
+                line2: addr.line2 || null,
+                city: addr.city || null,
+                state: addr.state || null,
+                postal_code: addr.postal_code || null,
+                country: addr.country || null,
+              };
+              console.log("✓ Got shipping address on retry:", JSON.stringify(shippingAddress));
+            }
+          } catch (retryErr) {
+            console.error("Retry failed:", retryErr);
+          }
+        }
+        
+        const finalShippingAddressJson = shippingAddress ? JSON.stringify(shippingAddress) : null;
+        
         const result = await client.query(
           `INSERT INTO dtf_orders
              (mode, size, quantity, transfer_name, garment_color, notes,
               files, unit_price_cents, total_price_cents, stripe_session_id, status, shipping_address)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11)
            ON CONFLICT (stripe_session_id) 
-           DO UPDATE SET shipping_address = COALESCE(EXCLUDED.shipping_address, dtf_orders.shipping_address)
-           RETURNING id`,
+           DO UPDATE SET 
+             shipping_address = COALESCE(EXCLUDED.shipping_address, dtf_orders.shipping_address),
+             status = COALESCE(dtf_orders.status, EXCLUDED.status)
+           RETURNING id, shipping_address`,
           [
             m.mode || "single-image",
             size,
@@ -177,27 +206,33 @@ module.exports = (req, res) => {
             unitPriceCents,
             totalPriceCents,
             session.id,
-            shippingAddressJson,
+            finalShippingAddressJson,
           ]
         );
 
         if (result.rowCount) {
+          const savedAddress = result.rows[0].shipping_address;
           console.log(
-            "Inserted/updated dtf_orders row for Stripe session",
+            "✓ Inserted/updated dtf_orders row for Stripe session",
             session.id,
             "with shipping_address:",
-            shippingAddressJson ? "yes" : "no"
+            savedAddress ? "yes" : "no"
           );
+          if (!savedAddress && finalShippingAddressJson) {
+            console.error("WARNING: Shipping address was extracted but not saved!");
+          }
         } else {
           console.log("No row affected for session:", session.id);
         }
       } catch (err) {
         console.error("Failed to insert dtf_orders row from Stripe webhook:", err);
         console.error("Error details:", err.message);
+        console.error("Error stack:", err.stack);
         // Check if it's a column error
         if (err.message && err.message.includes("shipping_address")) {
           console.error("ERROR: The shipping_address column may not exist in the database. Please run: ALTER TABLE dtf_orders ADD COLUMN shipping_address JSONB;");
         }
+        // Don't fail the webhook - return success so Stripe doesn't retry
       } finally {
         client.release();
       }
