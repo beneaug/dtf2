@@ -463,7 +463,8 @@ export function create(container) {
     const inputValue = wasTyping ? activeElement.value : null;
     
     // Only update the list if designs changed, otherwise just update max displays
-    const currentDesignIds = new Set(state.designFiles.map(d => d.id));
+    const designFiles = state.designFiles || [];
+    const currentDesignIds = new Set(designFiles.map(d => d.id));
     const existingDesignIds = new Set(
       Array.from(autoPackList.querySelectorAll('.gang-auto-pack-item'))
         .map(item => item.querySelector('.gang-auto-pack-qty')?.dataset.designId)
@@ -477,7 +478,7 @@ export function create(container) {
     
     if (designsChanged) {
       // Designs changed, need to recreate the list
-      updateAutoPackList(state.designFiles);
+      updateAutoPackList(designFiles);
       
       // Restore focus if user was typing
       if (wasTyping && focusedDesignId) {
