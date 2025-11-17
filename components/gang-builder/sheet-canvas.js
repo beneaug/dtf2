@@ -140,7 +140,20 @@ export function create(container) {
     
     const fitScaleX = (containerW * 0.95) / baseSheetWidthPx;
     const fitScaleY = (containerH * 0.95) / baseSheetHeightPx;
-    const scale = Math.min(fitScaleX, fitScaleY);
+    let scale = Math.min(fitScaleX, fitScaleY);
+    
+    // Ensure minimum size for preview
+    const MIN_SHEET_WIDTH = 650; // Minimum width in pixels for large preview
+    const MIN_SHEET_HEIGHT = 400; // Minimum height in pixels
+    
+    // Calculate scale needed to reach minimum dimensions
+    const minScaleX = MIN_SHEET_WIDTH / baseSheetWidthPx;
+    const minScaleY = MIN_SHEET_HEIGHT / baseSheetHeightPx;
+    const minScale = Math.max(minScaleX, minScaleY);
+    
+    // Use the larger of fit scale or minimum scale
+    // This ensures the sheet is at least the minimum size, but fits in container if container is larger
+    scale = Math.max(scale, minScale);
 
     const sheetWidthPx = baseSheetWidthPx * scale;
     const sheetHeightPx = baseSheetHeightPx * scale;
