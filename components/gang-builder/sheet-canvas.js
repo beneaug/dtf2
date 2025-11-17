@@ -97,14 +97,40 @@ export function create(container) {
   let containerWidth = 0;
   let containerHeight = 0;
   let isResizing = false; // Prevent recursive resize calls
-  let storedBaseScale = null; // Store base scale - only recalculate when sheet size changes
+  
+  // Calculate scale for current sheet size and zoom - SINGLE SOURCE OF TRUTH
+  function calculateScale() {
+    const state = store.getState();
+    const sheetSize = getSheetSize(state.selectedSheetSizeId);
+    if (!sheetSize) return { scale: 1, sheetWidthPx: 0, sheetHeightPx: 0 };
+    
+    const baseSheetWidthPx = convertInchesToPixels(sheetSize.widthIn);
+    const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
+    
+    // Use actual container dimensions (freshly measured)
+    const availableWidth = containerWidth || 100;
+    const availableHeight = containerHeight || 100;
+    
+    // Calculate base scale to fit in container (with 5% padding for breathing room)
+    const fitScaleX = (availableWidth * 0.95) / baseSheetWidthPx;
+    const fitScaleY = (availableHeight * 0.95) / baseSheetHeightPx;
+    const baseScale = Math.min(fitScaleX, fitScaleY);
+    
+    // Apply zoom level
+    const scale = baseScale * zoomLevel;
+    
+    const sheetWidthPx = baseSheetWidthPx * scale;
+    const sheetHeightPx = baseSheetHeightPx * scale;
+    
+    return { scale, sheetWidthPx, sheetHeightPx };
+  }
   
   // Resize canvas to fit container with high DPI support
   function resizeCanvas() {
     // Prevent recursive calls
     if (isResizing) return;
     
-    // ALWAYS get fresh wrapper dimensions - this is our fixed reference
+    // ALWAYS get fresh container dimensions from wrapper
     const wrapperRect = canvasWrapper.getBoundingClientRect();
     if (wrapperRect.width <= 0 || wrapperRect.height <= 0) {
       setTimeout(() => resizeCanvas(), 50);
@@ -113,58 +139,43 @@ export function create(container) {
     
     isResizing = true;
     
-    // Container is ALWAYS the wrapper size minus padding - NEVER changes
-    const containerW = Math.max(100, wrapperRect.width - 64);
-    const containerH = Math.max(100, wrapperRect.height - 64);
+    // Calculate available container space (wrapper minus padding)
+    const availableWidth = Math.max(100, wrapperRect.width - 64); // Account for 2rem padding
+    const availableHeight = Math.max(100, wrapperRect.height - 64);
     
-    // Store container dimensions for scale calculations
-    containerWidth = containerW;
-    containerHeight = containerH;
-    
-    // Container size is FIXED - never exceeds wrapper
-    canvasContainer.style.width = containerW + 'px';
-    canvasContainer.style.height = containerH + 'px';
+    // Store container dimensions BEFORE calculating scale
+    containerWidth = availableWidth;
+    containerHeight = availableHeight;
     
     // Use device pixel ratio for high DPI displays
     const dpr = window.devicePixelRatio || 1;
     
-    // Calculate canvas size based on sheet size and zoom
-    const state = store.getState();
-    const sheetSize = getSheetSize(state.selectedSheetSizeId);
+    // Calculate scale and sheet dimensions
+    const { sheetWidthPx, sheetHeightPx } = calculateScale();
     
-    if (sheetSize) {
-      const baseSheetWidthPx = convertInchesToPixels(sheetSize.widthIn);
-      const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
-      
-      // Calculate base scale ONCE - use larger multiplier for bigger base size
-      if (storedBaseScale === null) {
-        const fitScaleX = (containerW * 0.98) / baseSheetWidthPx; // Increased from 0.95 to 0.98
-        const fitScaleY = (containerH * 0.98) / baseSheetHeightPx;
-        storedBaseScale = Math.min(fitScaleX, fitScaleY);
-      }
-      
-      // Apply zoom: use stored base scale * zoomLevel
-      // Same multiplier for both dimensions = perfect aspect ratio
-      const scale = storedBaseScale * zoomLevel;
-      const sheetWidthPx = baseSheetWidthPx * scale;
-      const sheetHeightPx = baseSheetHeightPx * scale;
-      
-      // Canvas size: sheet + padding - NO WIDTH CAP
+    if (sheetWidthPx > 0 && sheetHeightPx > 0) {
+      // Canvas size: exactly what's needed (sheet + padding)
       const paddingPx = 32;
-      const canvasW = sheetWidthPx + paddingPx * 2; // No Math.max - let it be as wide as needed
-      const canvasH = sheetHeightPx + paddingPx * 2; // No Math.max - let it be as tall as needed
+      const neededWidth = sheetWidthPx + paddingPx * 2;
+      const neededHeight = sheetHeightPx + paddingPx * 2;
       
       // Set canvas size
-      canvas.width = canvasW * dpr;
-      canvas.height = canvasH * dpr;
-      canvas.style.width = canvasW + 'px';
-      canvas.style.height = canvasH + 'px';
+      canvas.width = neededWidth * dpr;
+      canvas.height = neededHeight * dpr;
+      canvas.style.width = neededWidth + 'px';
+      canvas.style.height = neededHeight + 'px';
+      
+      // Container matches canvas size
+      canvasContainer.style.width = neededWidth + 'px';
+      canvasContainer.style.height = neededHeight + 'px';
     } else {
-      // No sheet size - canvas matches container
-      canvas.width = containerW * dpr;
-      canvas.height = containerH * dpr;
-      canvas.style.width = containerW + 'px';
-      canvas.style.height = containerH + 'px';
+      // No sheet size selected, use container size
+      canvas.width = availableWidth * dpr;
+      canvas.height = availableHeight * dpr;
+      canvas.style.width = availableWidth + 'px';
+      canvas.style.height = availableHeight + 'px';
+      canvasContainer.style.width = availableWidth + 'px';
+      canvasContainer.style.height = availableHeight + 'px';
     }
     
     // Reset transform and scale the context to match DPR
@@ -189,31 +200,13 @@ export function create(container) {
     // Clear canvas (use actual canvas dimensions)
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Calculate base dimensions
-    const baseSheetWidthPx = convertInchesToPixels(sheetSize.widthIn);
-    const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
+    // Use the SAME scale calculation as resizeCanvas - ensures consistency
+    const { scale, sheetWidthPx, sheetHeightPx } = calculateScale();
     
-    // Use stored base scale - same as resizeCanvas
-    // This ensures both functions use the EXACT same scale calculation
-    if (storedBaseScale === null) {
-      const containerW = containerWidth || 100;
-      const containerH = containerHeight || 100;
-      const fitScaleX = (containerW * 0.98) / baseSheetWidthPx; // Match resizeCanvas
-      const fitScaleY = (containerH * 0.98) / baseSheetHeightPx;
-      storedBaseScale = Math.min(fitScaleX, fitScaleY);
-    }
-    
-    // Apply zoom: stored base scale * zoomLevel
-    const scale = storedBaseScale * zoomLevel;
-    
-    // Apply SAME scale to both dimensions - maintains aspect ratio
-    const sheetWidthPx = baseSheetWidthPx * scale;
-    const sheetHeightPx = baseSheetHeightPx * scale;
-    
-    // Position sheet - START AT VERY TOP (0 or minimal), centered horizontally
-    const paddingPx = 8; // Minimal padding
-    const offsetX = Math.max(paddingPx, (canvasWidth - sheetWidthPx) / 2);
-    const offsetY = 0; // START AT TOP - NO OFFSET
+    // Position sheet - ALWAYS at top, centered horizontally
+    const paddingPx = 32; // 2rem = 32px
+    const offsetX = Math.max(paddingPx, (canvasWidth - sheetWidthPx) / 2); // Center horizontally
+    const offsetY = paddingPx; // ALWAYS start at top
 
     // Draw grid (subtle)
     if (state.snapIncrement > 0) {
@@ -554,20 +547,9 @@ export function create(container) {
     // Resize canvas to accommodate new zoom level
     resizeCanvas();
     
-    // FORCE scroll to top when zooming
-    if (canvasWrapper) {
-      canvasWrapper.scrollTop = 0;
-      canvasWrapper.scrollLeft = 0;
-    }
-    
     // Reposition controls after resize (they should stay fixed)
     requestAnimationFrame(() => {
       positionZoomControls();
-      // Ensure scroll stays at top
-      if (canvasWrapper) {
-        canvasWrapper.scrollTop = 0;
-        canvasWrapper.scrollLeft = 0;
-      }
       isZooming = false;
     });
   }
@@ -598,32 +580,42 @@ export function create(container) {
       }
     });
     
-    // If sheet size changed, reset zoom and resize canvas
+    // If sheet size changed, completely reset everything
     const sheetSizeChanged = lastSheetSizeId !== null && lastSheetSizeId !== state.selectedSheetSizeId;
     if (sheetSizeChanged) {
       lastSheetSizeId = state.selectedSheetSizeId;
       
-      // Reset zoom to recommended level for this sheet size
+      // STEP 1: Reset zoom to recommended level for this sheet size
       const defaultZoom = getDefaultZoomForSheetSize(state.selectedSheetSizeId);
       zoomLevel = defaultZoom;
       updateZoomDisplay();
       
-      // Reset stored base scale - will be recalculated on next resize
-      storedBaseScale = null;
+      // STEP 2: Clear canvas container inline styles to reset dimensions
+      canvasContainer.style.width = '';
+      canvasContainer.style.height = '';
       
-      // Reset flags to allow fresh resize
+      // STEP 3: Reset container dimensions to force fresh measurement
+      containerWidth = 0;
+      containerHeight = 0;
+      
+      // STEP 4: Reset flags to allow fresh resize
       isResizing = false;
       
-      // Wait for DOM to settle, then resize with fresh measurements
+      // STEP 5: Wait for DOM to settle, then resize with fresh measurements
       requestAnimationFrame(() => {
-        resizeCanvas(); // This will get fresh wrapper dimensions and reset container to fixed size
-        positionZoomControls();
-        // FORCE scroll to top immediately
-        if (canvasWrapper) {
-          canvasWrapper.scrollTop = 0;
-          canvasWrapper.scrollLeft = 0;
+        // Get fresh wrapper dimensions
+        const wrapperRect = canvasWrapper.getBoundingClientRect();
+        if (wrapperRect.width > 0 && wrapperRect.height > 0) {
+          // Store fresh container dimensions
+          containerWidth = Math.max(100, wrapperRect.width - 64);
+          containerHeight = Math.max(100, wrapperRect.height - 64);
         }
-        // Also force after render completes
+        
+        // Now resize with correct dimensions
+        resizeCanvas();
+        positionZoomControls();
+        
+        // Scroll to top after resize
         requestAnimationFrame(() => {
           if (canvasWrapper) {
             canvasWrapper.scrollTop = 0;
