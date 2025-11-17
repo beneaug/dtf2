@@ -57,14 +57,6 @@ export function create(container) {
               <p class="gang-empty-state">No designs uploaded yet</p>
             </div>
           </div>
-          <div class="gang-layout-group">
-            <label class="gang-label">Snap to grid:</label>
-            <div class="gang-snap-buttons">
-              <button class="gang-snap-btn" data-increment="0">Off</button>
-              <button class="gang-snap-btn" data-increment="0.125">1/8"</button>
-              <button class="gang-snap-btn gang-snap-btn-active" data-increment="0.25">1/4"</button>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -211,11 +203,9 @@ export function create(container) {
       
       packBtn.addEventListener("click", () => {
         const qty = parseInt(qtyInput.value, 10) || 1;
-        const result = store.addInstancesForDesign(design.id, qty, true);
-        if (result && result.maxInstances) {
-          maxInstancesMap.set(design.id, result.maxInstances);
-          updateMaxDisplay();
-        }
+        store.addInstancesForDesign(design.id, qty, true);
+        // After placing, recalculate the actual max (this will trigger state update and recalc)
+        // The max will be recalculated in the subscribe callback
         // Preserve the entered quantity
         quantityValues.set(design.id, qtyInput.value);
       });
@@ -237,16 +227,6 @@ export function create(container) {
     });
   }
 
-  // Snap buttons
-  const snapButtons = container.querySelectorAll(".gang-snap-btn");
-  snapButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      snapButtons.forEach((b) => b.classList.remove("gang-snap-btn-active"));
-      btn.classList.add("gang-snap-btn-active");
-      const increment = parseFloat(btn.dataset.increment);
-      store.setSnapIncrement(increment);
-    });
-  });
 
   // Quantity controls
   const qtyInput = container.querySelector("#gang-qty-input");
@@ -271,9 +251,16 @@ export function create(container) {
 
   // Add to cart
   const addToCartBtn = container.querySelector("#gang-add-to-cart");
-  addToCartBtn.addEventListener("click", () => {
+  addToCartBtn.addEventListener("click", async () => {
     const state = store.getState();
-    addToCart(state);
+    addToCartBtn.disabled = true;
+    addToCartBtn.textContent = "Processing...";
+    try {
+      await addToCart(state);
+    } finally {
+      addToCartBtn.disabled = false;
+      addToCartBtn.textContent = "Add to Cart";
+    }
   });
 
   // Size controls
