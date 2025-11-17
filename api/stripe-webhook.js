@@ -127,13 +127,14 @@ module.exports = (req, res) => {
         try {
           const checkClient = await pool.connect();
           try {
-            // Find most recent pending order with gang_sheet_data (created in last 10 minutes)
+            // Find most recent pending order with gang_sheet_data (created in last 15 minutes)
+            // Also check if mode matches to be more specific
             const checkResult = await checkClient.query(
-              `SELECT id, gang_sheet_data, stripe_session_id, created_at 
+              `SELECT id, gang_sheet_data, stripe_session_id, created_at, mode
                FROM dtf_orders 
                WHERE stripe_session_id LIKE 'pending-%' 
                  AND gang_sheet_data IS NOT NULL
-                 AND created_at > NOW() - INTERVAL '10 minutes'
+                 AND created_at > NOW() - INTERVAL '15 minutes'
                ORDER BY created_at DESC
                LIMIT 1`,
               []
@@ -143,6 +144,7 @@ module.exports = (req, res) => {
               console.log("✓ Found pending order with gang_sheet_data:", existingOrder.id);
               console.log("  Created at:", existingOrder.created_at);
               console.log("  Session_id:", existingOrder.stripe_session_id);
+              console.log("  Mode:", existingOrder.mode);
             } else {
               console.log("No pending orders with gang_sheet_data found");
             }
@@ -151,6 +153,34 @@ module.exports = (req, res) => {
           }
         } catch (dbErr) {
           console.error("Failed to search for pending orders:", dbErr);
+        }
+      }
+      
+      // If we still don't have an order but mode is gang-sheet, look for ANY pending order
+      if (!existingOrder && m.mode === 'gang-sheet') {
+        console.log("Mode is gang-sheet but no order found, searching for any pending order");
+        try {
+          const checkClient = await pool.connect();
+          try {
+            const checkResult = await checkClient.query(
+              `SELECT id, gang_sheet_data, stripe_session_id, created_at
+               FROM dtf_orders 
+               WHERE stripe_session_id LIKE 'pending-%'
+                 AND mode = 'gang-sheet'
+                 AND created_at > NOW() - INTERVAL '15 minutes'
+               ORDER BY created_at DESC
+               LIMIT 1`,
+              []
+            );
+            if (checkResult.rows.length > 0) {
+              existingOrder = checkResult.rows[0];
+              console.log("✓ Found pending gang-sheet order:", existingOrder.id);
+            }
+          } finally {
+            checkClient.release();
+          }
+        } catch (dbErr) {
+          console.error("Failed to search for pending gang-sheet orders:", dbErr);
         }
       }
       

@@ -335,7 +335,13 @@
             order.gang_sheet_data
               ? `<section class="ops-detail-notes">
                   <h4 class="ops-detail-section-heading">Gang Sheet Layout</h4>
-                  <div id="ops-gang-sheet-viewer-${order.id}" class="ops-gang-sheet-viewer"></div>
+                  <button 
+                    class="ops-view-gang-sheet-btn" 
+                    data-order-id="${order.id}"
+                    type="button"
+                  >
+                    View Gang Sheet Layout
+                  </button>
                 </section>`
               : ""
           }
@@ -409,14 +415,87 @@
           loadThumbnail(order, artContainer, "large");
         }
 
-        // Load gang sheet viewer if data exists
+        // Setup gang sheet viewer button
         if (order.gang_sheet_data) {
-          const viewerContainer = document.getElementById(
-            `ops-gang-sheet-viewer-${order.id}`
+          const viewBtn = document.querySelector(
+            `.ops-view-gang-sheet-btn[data-order-id="${order.id}"]`
           );
-          if (viewerContainer) {
-            renderGangSheetViewer(order.gang_sheet_data, viewerContainer);
+          if (viewBtn) {
+            viewBtn.addEventListener('click', () => {
+              openGangSheetModal(order.gang_sheet_data, order.id);
+            });
           }
+        }
+      }
+
+      function openGangSheetModal(gangSheetData, orderId) {
+        if (!gangSheetData) return;
+
+        try {
+          const data = typeof gangSheetData === 'string' 
+            ? JSON.parse(gangSheetData) 
+            : gangSheetData;
+
+          // Create modal overlay
+          const modal = document.createElement('div');
+          modal.className = 'ops-gang-sheet-modal';
+          modal.innerHTML = `
+            <div class="ops-gang-sheet-modal-content">
+              <div class="ops-gang-sheet-modal-header">
+                <h3 class="ops-gang-sheet-modal-title">Gang Sheet Layout - Order #${orderId}</h3>
+                <button class="ops-gang-sheet-modal-close" type="button" aria-label="Close">×</button>
+              </div>
+              <div class="ops-gang-sheet-modal-body">
+                <div class="ops-gang-sheet-info-grid">
+                  <div class="ops-gang-sheet-info-item">
+                    <span class="ops-detail-label">Sheet Size</span>
+                    <span class="ops-detail-value">${data.sheetSizeId || '—'}</span>
+                  </div>
+                  <div class="ops-gang-sheet-info-item">
+                    <span class="ops-detail-label">Quantity</span>
+                    <span class="ops-detail-value">${data.quantity || '—'}</span>
+                  </div>
+                  <div class="ops-gang-sheet-info-item">
+                    <span class="ops-detail-label">Usage</span>
+                    <span class="ops-detail-value">${data.usageStats ? Math.round(data.usageStats.usagePct || 0) + '%' : '—'}</span>
+                  </div>
+                  <div class="ops-gang-sheet-info-item">
+                    <span class="ops-detail-label">Instances</span>
+                    <span class="ops-detail-value">${data.usageStats ? data.usageStats.instanceCount || 0 : '—'}</span>
+                  </div>
+                </div>
+                <div class="ops-gang-sheet-canvas-wrapper">
+                  <canvas id="ops-gang-sheet-canvas-${orderId}-${Date.now()}" class="ops-gang-sheet-canvas"></canvas>
+                </div>
+              </div>
+            </div>
+          `;
+
+          document.body.appendChild(modal);
+
+          // Close handlers
+          const closeBtn = modal.querySelector('.ops-gang-sheet-modal-close');
+          const closeModal = () => {
+            document.body.removeChild(modal);
+          };
+          closeBtn.addEventListener('click', closeModal);
+          modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+          });
+          document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && document.body.contains(modal)) {
+              closeModal();
+            }
+          });
+
+          // Render canvas
+          const canvas = modal.querySelector('canvas');
+          if (canvas && data.instanceLayout && data.designFiles) {
+            renderGangSheetCanvas(canvas, data, orderId);
+          }
+        } catch (err) {
+          console.error('Failed to open gang sheet modal:', err);
+          alert('Failed to load gang sheet layout.');
         }
       }
 
@@ -463,11 +542,11 @@
         }
       }
 
-      function renderGangSheetCanvas(canvas, data) {
+      async function renderGangSheetCanvas(canvas, data, orderId) {
         if (!canvas || !data.instanceLayout || !data.designFiles) return;
 
         const ctx = canvas.getContext('2d');
-        const PX_PER_INCH = 50; // Scale for display
+        const PX_PER_INCH = 40; // Scale for display
         
         // Get sheet size
         const sheetSizes = {
@@ -487,17 +566,62 @@
         canvas.height = sheetHeightPx;
         
         // Draw sheet background
-        ctx.fillStyle = '#f0f0f0';
+        ctx.fillStyle = 'rgba(240, 240, 240, 0.1)';
         ctx.fillRect(0, 0, sheetWidthPx, sheetHeightPx);
-        ctx.strokeStyle = '#ccc';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
         ctx.lineWidth = 2;
         ctx.strokeRect(0, 0, sheetWidthPx, sheetHeightPx);
         
-        // Create design file map
+        // Create design file map and load images
         const designMap = new Map();
+        const imageCache = new Map();
+        
         data.designFiles.forEach(file => {
           designMap.set(file.id, file);
         });
+        
+        // Load all images first - find matching file by name from order
+        const order = OPS_CURRENT_ORDERS.find(o => Number(o.id) === Number(orderId));
+        const orderFiles = order && Array.isArray(order.files) ? order.files : [];
+        
+        const imagePromises = data.designFiles.map(async (file) => {
+          try {
+            // Find matching file in order by name
+            const matchingFile = orderFiles.find(f => {
+              const fileName = f.filename || f.name || '';
+              return fileName === file.name || fileName.includes(file.name) || file.name.includes(fileName);
+            });
+            
+            if (matchingFile) {
+              // Use the file index to load the image
+              const fileIndex = orderFiles.indexOf(matchingFile);
+              const res = await opsFetch(`/api/operator/file?orderId=${orderId}&index=${fileIndex}`);
+              const fileData = await res.json();
+              
+              if (res.ok && fileData.ok && fileData.url) {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                await new Promise((resolve, reject) => {
+                  img.onload = resolve;
+                  img.onerror = () => {
+                    console.warn('Failed to load image:', file.name);
+                    resolve(); // Continue even if image fails
+                  };
+                  img.src = fileData.url;
+                });
+                imageCache.set(file.id, img);
+              } else {
+                console.warn('Failed to get image URL for:', file.name);
+              }
+            } else {
+              console.warn('No matching file found for:', file.name);
+            }
+          } catch (err) {
+            console.error('Error loading image:', file.name, err);
+          }
+        });
+        
+        await Promise.all(imagePromises);
         
         // Draw each instance
         data.instanceLayout.forEach(instance => {
@@ -509,8 +633,26 @@
           const width = instance.widthIn * PX_PER_INCH;
           const height = instance.heightIn * PX_PER_INCH;
           
+          // Draw image if available
+          const img = imageCache.get(instance.designId);
+          if (img && img.complete && img.naturalWidth > 0) {
+            ctx.save();
+            
+            if (instance.rotationDeg) {
+              const centerX = x + width / 2;
+              const centerY = y + height / 2;
+              ctx.translate(centerX, centerY);
+              ctx.rotate((instance.rotationDeg * Math.PI) / 180);
+              ctx.drawImage(img, -width / 2, -height / 2, width, height);
+            } else {
+              ctx.drawImage(img, x, y, width, height);
+            }
+            
+            ctx.restore();
+          }
+          
           // Draw bounding box
-          ctx.strokeStyle = '#0066cc';
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
           ctx.lineWidth = 1;
           ctx.setTransform(1, 0, 0, 1, 0, 0);
           
@@ -527,10 +669,12 @@
           }
           
           // Draw label
-          ctx.fillStyle = '#0066cc';
-          ctx.font = '10px sans-serif';
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+          ctx.font = '11px sans-serif';
           ctx.textAlign = 'left';
-          ctx.fillText(design.name || 'Design', x + 2, y + 12);
+          ctx.textBaseline = 'top';
+          const labelText = design.name || 'Design';
+          ctx.fillText(labelText, x + 3, y + 3);
         });
       }
 
@@ -768,18 +912,111 @@
       });
     </script>
     <style>
-      .ops-gang-sheet-viewer {
-        margin-top: 1rem;
+      .ops-view-gang-sheet-btn {
+        margin-top: 0.5rem;
+        padding: 0.6rem 1.2rem;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.1);
+        color: #f5f5f5;
+        font-size: 0.8rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 140ms ease-out;
       }
       
-      .ops-gang-sheet-info {
+      .ops-view-gang-sheet-btn:hover {
+        background: rgba(255, 255, 255, 0.15);
+        border-color: rgba(255, 255, 255, 0.3);
+        transform: translateY(-1px);
+      }
+      
+      .ops-gang-sheet-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.85);
+        backdrop-filter: blur(8px);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        overflow: auto;
+      }
+      
+      .ops-gang-sheet-modal-content {
+        width: 100%;
+        max-width: 1400px;
+        max-height: 90vh;
+        border-radius: 1rem;
+        background: radial-gradient(
+            circle at top left,
+            rgba(255, 255, 255, 0.05),
+            transparent 55%
+          ),
+          rgba(7, 8, 12, 0.98);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      
+      .ops-gang-sheet-modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      
+      .ops-gang-sheet-modal-title {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #f5f5f5;
+      }
+      
+      .ops-gang-sheet-modal-close {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 50%;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.1);
+        color: #f5f5f5;
+        font-size: 1.5rem;
+        line-height: 1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 140ms ease-out;
+      }
+      
+      .ops-gang-sheet-modal-close:hover {
+        background: rgba(255, 255, 255, 0.2);
+        border-color: rgba(255, 255, 255, 0.3);
+      }
+      
+      .ops-gang-sheet-modal-body {
+        padding: 1.5rem;
+        overflow: auto;
+        flex: 1;
+      }
+      
+      .ops-gang-sheet-info-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
         gap: 1rem;
-        margin-bottom: 1rem;
+        margin-bottom: 1.5rem;
         padding: 1rem;
-        background: #f9f9f9;
-        border-radius: 4px;
+        background: rgba(10, 11, 15, 0.6);
+        border-radius: 0.7rem;
+        border: 1px solid rgba(255, 255, 255, 0.08);
       }
       
       .ops-gang-sheet-info-item {
@@ -788,13 +1025,16 @@
         gap: 0.25rem;
       }
       
-      .ops-gang-sheet-canvas-container {
+      .ops-gang-sheet-canvas-wrapper {
         width: 100%;
         overflow: auto;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        background: #fff;
-        padding: 1rem;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 0.7rem;
+        background: rgba(10, 11, 15, 0.4);
+        padding: 1.5rem;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
       }
       
       .ops-gang-sheet-canvas {
