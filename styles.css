@@ -1307,6 +1307,12 @@ body {
   background: rgba(10, 11, 15, 0.6);
   border-radius: 0.7rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
+  flex-wrap: wrap;
+}
+
+.gang-design-item .gang-design-info {
+  flex: 1;
+  min-width: 120px;
 }
 
 .gang-design-thumb {
@@ -1374,6 +1380,63 @@ body {
 .gang-design-remove-btn:hover {
   opacity: 1;
   color: #ffb8b8;
+}
+
+.gang-design-edit-btn {
+  padding: 0.4rem 0.8rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 0.5rem;
+  color: #f5f5f5;
+  font-size: 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 140ms ease-out;
+  margin-right: 0.5rem;
+}
+
+.gang-design-edit-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.gang-size-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.gang-size-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.gang-size-inputs .gang-input {
+  width: 100%;
+}
+
+.gang-dpi-display {
+  padding: 0.75rem;
+  background: rgba(10, 11, 15, 0.6);
+  border-radius: 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.gang-dpi-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.gang-dpi-value {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #f5f5f5;
+}
+
+.gang-dpi-details {
+  font-size: 0.75rem;
+  color: #a0a0a0;
 }
 
 .gang-layout-controls {

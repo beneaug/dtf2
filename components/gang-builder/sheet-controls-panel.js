@@ -32,6 +32,20 @@ export function create(container) {
         </div>
         <div class="gang-designs-list" id="gang-designs-list"></div>
       </div>
+      
+      <div class="gang-controls-section" id="gang-size-controls-section" style="display: none;">
+        <h3 class="gang-controls-heading">Artwork Size</h3>
+        <div class="gang-size-controls" id="gang-size-controls">
+          <div class="gang-size-inputs">
+            <label class="gang-label">Width (inches):</label>
+            <input type="number" id="gang-size-width" class="gang-input" step="0.1" min="0.1" />
+            <label class="gang-label">Height (inches):</label>
+            <input type="number" id="gang-size-height" class="gang-input" step="0.1" min="0.1" />
+          </div>
+          <div class="gang-dpi-display" id="gang-dpi-display"></div>
+          <button id="gang-size-apply" class="gang-btn gang-btn-secondary">Apply & Reorganize</button>
+        </div>
+      </div>
 
       <div class="gang-controls-section">
         <h3 class="gang-controls-heading">Step 3: Layout</h3>
@@ -110,6 +124,8 @@ export function create(container) {
     handleFiles(e.target.files);
   });
 
+  let lastUploadedDesignId = null;
+
   function handleFiles(files) {
     Array.from(files).forEach((file) => {
       if (file.type.startsWith("image/")) {
@@ -125,6 +141,9 @@ export function create(container) {
               naturalHeightPx: img.naturalHeight,
             };
             store.addDesignFile(designFile);
+            // Auto-select in Step 3 dropdown
+            lastUploadedDesignId = designFile.id;
+            // Update will happen in the subscribe callback
           };
           img.src = e.target.result;
         };
@@ -185,6 +204,76 @@ export function create(container) {
     addToCart(state);
   });
 
+  // Size controls
+  const sizeControlsSection = container.querySelector("#gang-size-controls-section");
+  const sizeWidthInput = container.querySelector("#gang-size-width");
+  const sizeHeightInput = container.querySelector("#gang-size-height");
+  const dpiDisplay = container.querySelector("#gang-dpi-display");
+  const sizeApplyBtn = container.querySelector("#gang-size-apply");
+  let selectedDesignForSize = null;
+
+  // Calculate and display DPI
+  function updateDPI(design, widthIn, heightIn) {
+    if (!design || !widthIn || !heightIn) {
+      dpiDisplay.textContent = "";
+      return;
+    }
+    
+    const dpiX = design.naturalWidthPx / widthIn;
+    const dpiY = design.naturalHeightPx / heightIn;
+    const avgDPI = (dpiX + dpiY) / 2;
+    
+    dpiDisplay.innerHTML = `
+      <div class="gang-dpi-info">
+        <div class="gang-dpi-value">${avgDPI.toFixed(1)} DPI</div>
+        <div class="gang-dpi-details">${dpiX.toFixed(1)} × ${dpiY.toFixed(1)}</div>
+      </div>
+    `;
+  }
+
+  // Update size inputs when design is selected
+  function updateSizeControls(design) {
+    if (design) {
+      selectedDesignForSize = design;
+      sizeWidthInput.value = design.widthIn.toFixed(2);
+      sizeHeightInput.value = design.heightIn.toFixed(2);
+      updateDPI(design, design.widthIn, design.heightIn);
+      sizeControlsSection.style.display = "block";
+    } else {
+      selectedDesignForSize = null;
+      sizeControlsSection.style.display = "none";
+    }
+  }
+
+  // Update DPI as user types
+  sizeWidthInput.addEventListener("input", () => {
+    if (selectedDesignForSize) {
+      const width = parseFloat(sizeWidthInput.value) || 0;
+      const height = parseFloat(sizeHeightInput.value) || 0;
+      updateDPI(selectedDesignForSize, width, height);
+    }
+  });
+
+  sizeHeightInput.addEventListener("input", () => {
+    if (selectedDesignForSize) {
+      const width = parseFloat(sizeWidthInput.value) || 0;
+      const height = parseFloat(sizeHeightInput.value) || 0;
+      updateDPI(selectedDesignForSize, width, height);
+    }
+  });
+
+  // Apply size changes and reorganize
+  sizeApplyBtn.addEventListener("click", () => {
+    if (!selectedDesignForSize) return;
+    
+    const width = parseFloat(sizeWidthInput.value);
+    const height = parseFloat(sizeHeightInput.value);
+    
+    if (width > 0 && height > 0) {
+      store.updateDesignSize(selectedDesignForSize.id, width, height, true);
+    }
+  });
+
   // Subscribe to state changes
   store.subscribe((state) => {
     // Update sheet size buttons
@@ -193,10 +282,27 @@ export function create(container) {
     });
 
     // Update designs list
-    updateDesignsList(container.querySelector("#gang-designs-list"), state.designFiles);
+    updateDesignsList(container.querySelector("#gang-designs-list"), state.designFiles, (designId) => {
+      const design = state.designFiles.find((d) => d.id === designId);
+      updateSizeControls(design);
+    });
 
-    // Update auto-pack design select
+    // Update auto-pack design select and auto-select last uploaded
     updateAutoPackSelect(autoPackDesignSelect, state.designFiles);
+    if (lastUploadedDesignId && state.designFiles.find((d) => d.id === lastUploadedDesignId)) {
+      autoPackDesignSelect.value = lastUploadedDesignId;
+      lastUploadedDesignId = null; // Reset after selecting
+    }
+
+    // Update size controls if design still exists
+    if (selectedDesignForSize) {
+      const updatedDesign = state.designFiles.find((d) => d.id === selectedDesignForSize.id);
+      if (updatedDesign) {
+        updateSizeControls(updatedDesign);
+      } else {
+        updateSizeControls(null);
+      }
+    }
 
     // Update quantity input
     qtyInput.value = state.sheetQuantity;
@@ -206,7 +312,7 @@ export function create(container) {
   });
 }
 
-function updateDesignsList(container, designFiles) {
+function updateDesignsList(container, designFiles, onSelectDesign) {
   container.innerHTML = "";
   
   if (designFiles.length === 0) {
@@ -217,20 +323,30 @@ function updateDesignsList(container, designFiles) {
   designFiles.forEach((design) => {
     const item = document.createElement("div");
     item.className = "gang-design-item";
+    const sizeIn = design.widthIn && design.heightIn 
+      ? `${design.widthIn.toFixed(2)}" × ${design.heightIn.toFixed(2)}"`
+      : `${design.naturalWidthPx} × ${design.naturalHeightPx} px`;
+    
     item.innerHTML = `
       <div class="gang-design-thumb">
         <img src="${design.url}" alt="${design.name}" />
       </div>
       <div class="gang-design-info">
         <div class="gang-design-name">${design.name}</div>
-        <div class="gang-design-size">${design.naturalWidthPx} × ${design.naturalHeightPx} px</div>
+        <div class="gang-design-size">${sizeIn}</div>
       </div>
+      <button class="gang-design-edit-btn" data-design-id="${design.id}">Edit size</button>
       <button class="gang-design-use-btn" data-design-id="${design.id}">Use on sheet</button>
       <button class="gang-design-remove-btn" data-design-id="${design.id}" aria-label="Remove">×</button>
     `;
     
+    const editBtn = item.querySelector(".gang-design-edit-btn");
     const useBtn = item.querySelector(".gang-design-use-btn");
     const removeBtn = item.querySelector(".gang-design-remove-btn");
+    
+    editBtn.addEventListener("click", () => {
+      if (onSelectDesign) onSelectDesign(design.id);
+    });
     
     useBtn.addEventListener("click", () => {
       store.addInstancesForDesign(design.id, 1, false);
