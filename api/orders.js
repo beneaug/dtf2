@@ -90,11 +90,21 @@ module.exports = (req, res) => {
       let tempOrderId = null;
       if (fields.gangSheetData) {
         try {
-          gangSheetData = JSON.parse(fields.gangSheetData);
+          const parsed = typeof fields.gangSheetData === 'string' 
+            ? JSON.parse(fields.gangSheetData) 
+            : fields.gangSheetData;
+          gangSheetData = parsed;
           console.log("Parsed gang sheet data, size:", JSON.stringify(gangSheetData).length, "chars");
+          console.log("  Has sheetSizeId:", !!gangSheetData.sheetSizeId);
+          console.log("  Has instanceLayout:", !!gangSheetData.instanceLayout);
+          console.log("  Instance count:", gangSheetData.instanceLayout?.length || 0);
         } catch (e) {
           console.error("Failed to parse gangSheetData:", e);
+          console.error("  Raw value:", fields.gangSheetData);
         }
+      } else {
+        console.log("No gangSheetData field found in form data");
+        console.log("  Available fields:", Object.keys(fields));
       }
 
       const unitPrice = fields.unitPrice ? parseFloat(fields.unitPrice) : null;
@@ -141,10 +151,51 @@ module.exports = (req, res) => {
             );
             
             if (existingCheck.rows.length > 0) {
-              // Use existing order
-              tempOrderId = existingCheck.rows[0].id;
+              // Update existing order with new gang sheet data
+              const existingOrder = existingCheck.rows[0];
+              tempOrderId = existingOrder.id;
               console.log("✓ Found existing order with same files hash:", tempOrderId);
-              console.log("  Will update this order in webhook");
+              
+              // Update the existing order with new gang sheet data
+              const updateResult = await client.query(
+                `UPDATE dtf_orders
+                 SET gang_sheet_data = $1::jsonb,
+                     mode = $2,
+                     size = $3,
+                     quantity = $4,
+                     transfer_name = $5,
+                     garment_color = $6,
+                     notes = $7,
+                     files = $8,
+                     unit_price_cents = $9,
+                     total_price_cents = $10,
+                     stripe_session_id = $11
+                 WHERE id = $12
+                 RETURNING id, gang_sheet_data`,
+                [
+                  gangSheetData,
+                  mode,
+                  size,
+                  quantity,
+                  transferName,
+                  garmentColor,
+                  notes,
+                  JSON.stringify(uploadedFiles),
+                  unitPriceCents,
+                  totalPriceCents,
+                  tempSessionId,
+                  tempOrderId,
+                ]
+              );
+              
+              if (updateResult.rows.length > 0) {
+                const savedGangSheetData = updateResult.rows[0].gang_sheet_data;
+                console.log("✓ Updated existing order with new gang_sheet_data");
+                console.log("  gang_sheet_data saved:", savedGangSheetData ? "YES" : "NO - NULL!");
+                if (!savedGangSheetData) {
+                  console.error("ERROR: gang_sheet_data was not saved in update!");
+                }
+              }
             } else {
               // Create new order
               const insertResult = await client.query(

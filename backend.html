@@ -513,8 +513,16 @@
           const designFilesWithUrls = await Promise.all(data.designFiles.map(async (file) => {
             // Find matching file in order
             const matchingFile = orderFiles.find(f => {
-              const fileName = f.filename || f.name || '';
-              return fileName === file.name || fileName.includes(file.name) || file.name.includes(fileName);
+              // Ensure we have strings for comparison
+              const fileName = String(f.filename || f.name || '').trim();
+              const designFileName = String(file.name || '').trim();
+              
+              if (!fileName || !designFileName) return false;
+              
+              // Try exact match first, then partial matches
+              return fileName === designFileName || 
+                     fileName.includes(designFileName) || 
+                     designFileName.includes(fileName);
             });
             
             let imageUrl = null;
