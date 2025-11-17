@@ -14,14 +14,14 @@ import { convertInchesToPixels, convertPixelsToInches, snapToGrid, isWithinBound
  */
 export function create(container) {
   container.innerHTML = `
-    <div class="gang-canvas-wrapper">
+    <div class="gang-canvas-wrapper" id="gang-canvas-wrapper">
+      <div class="gang-zoom-controls">
+        <button class="gang-zoom-btn" id="gang-zoom-out" aria-label="Zoom out">−</button>
+        <span class="gang-zoom-level" id="gang-zoom-level">150%</span>
+        <button class="gang-zoom-btn" id="gang-zoom-in" aria-label="Zoom in">+</button>
+      </div>
       <div class="gang-canvas-container" id="gang-canvas-container">
         <canvas id="gang-canvas"></canvas>
-        <div class="gang-zoom-controls">
-          <button class="gang-zoom-btn" id="gang-zoom-out" aria-label="Zoom out">−</button>
-          <span class="gang-zoom-level" id="gang-zoom-level">150%</span>
-          <button class="gang-zoom-btn" id="gang-zoom-in" aria-label="Zoom in">+</button>
-        </div>
       </div>
     </div>
   `;
@@ -111,12 +111,18 @@ export function create(container) {
         canvas.height = neededHeight * dpr;
         canvas.style.width = neededWidth + 'px';
         canvas.style.height = neededHeight + 'px';
+        
+        // Also ensure container is large enough to show full canvas
+        canvasContainer.style.width = neededWidth + 'px';
+        canvasContainer.style.height = neededHeight + 'px';
       } else {
         // No sheet size selected, use container size
         canvas.width = containerWidth * dpr;
         canvas.height = containerHeight * dpr;
         canvas.style.width = containerWidth + 'px';
         canvas.style.height = containerHeight + 'px';
+        canvasContainer.style.width = containerWidth + 'px';
+        canvasContainer.style.height = containerHeight + 'px';
       }
       
       // Reset transform and scale the context to match DPR
@@ -529,10 +535,16 @@ export function create(container) {
     const sheetSizeChanged = lastSheetSizeId !== null && lastSheetSizeId !== state.selectedSheetSizeId;
     if (sheetSizeChanged) {
       lastSheetSizeId = state.selectedSheetSizeId;
-      // Reset zoom to default when sheet size changes
+      // FORCE reset zoom to default when sheet size changes - this MUST happen
       zoomLevel = 1.5;
       updateZoomDisplay();
-      // Resize canvas when sheet size changes
+      // Force container dimension refresh
+      const rect = canvasContainer.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        containerWidth = rect.width;
+        containerHeight = rect.height;
+      }
+      // Resize canvas when sheet size changes - this will recalculate everything
       resizeCanvas();
       // Scroll to top after resize completes
       requestAnimationFrame(() => {
