@@ -103,14 +103,28 @@ export function create(container) {
     // Prevent recursive calls
     if (isResizing) return;
     
-    const rect = canvasContainer.getBoundingClientRect();
+    // Get ACTUAL container dimensions - prefer center panel if available
+    let actualWidth = 0;
+    let actualHeight = 0;
+    
+    const centerPanel = container.closest(".gang-builder-center");
+    if (centerPanel) {
+      const centerRect = centerPanel.getBoundingClientRect();
+      actualWidth = centerRect.width;
+      actualHeight = centerRect.height;
+    } else {
+      const rect = canvasContainer.getBoundingClientRect();
+      actualWidth = rect.width;
+      actualHeight = rect.height;
+    }
+    
     // Ensure we have valid dimensions
-    if (rect.width > 0 && rect.height > 0) {
+    if (actualWidth > 0 && actualHeight > 0) {
       isResizing = true;
       
-      // Store container dimensions
-      containerWidth = rect.width;
-      containerHeight = rect.height;
+      // Store container dimensions from actual measurements
+      containerWidth = actualWidth;
+      containerHeight = actualHeight;
       
       // Use device pixel ratio for high DPI displays
       const dpr = window.devicePixelRatio || 1;
@@ -584,38 +598,64 @@ export function create(container) {
       }
     });
     
-    // If sheet size changed, reset zoom and resize canvas
+    // If sheet size changed, COMPLETELY reset everything
     const sheetSizeChanged = lastSheetSizeId !== null && lastSheetSizeId !== state.selectedSheetSizeId;
     if (sheetSizeChanged) {
       lastSheetSizeId = state.selectedSheetSizeId;
-      // FORCE reset zoom to recommended level for this sheet size
+      
+      // STEP 1: Reset zoom FIRST before any calculations
       const defaultZoom = getDefaultZoomForSheetSize(state.selectedSheetSizeId);
       zoomLevel = defaultZoom;
       updateZoomDisplay();
       
-      // Force container dimension refresh - get fresh measurements
-      const rect = canvasContainer.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        containerWidth = rect.width;
-        containerHeight = rect.height;
+      // STEP 2: Clear canvas container inline styles to reset dimensions
+      canvasContainer.style.width = '';
+      canvasContainer.style.height = '';
+      canvas.style.width = '';
+      canvas.style.height = '';
+      
+      // STEP 3: Force a complete reset of container dimensions
+      // Get the ACTUAL container dimensions from the DOM (not cached)
+      const centerPanel = container.closest(".gang-builder-center");
+      if (centerPanel) {
+        const centerRect = centerPanel.getBoundingClientRect();
+        // Use the center panel's actual width/height as the container dimensions
+        containerWidth = centerRect.width;
+        containerHeight = centerRect.height;
+      } else {
+        // Fallback: get from canvasContainer itself
+        const rect = canvasContainer.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          containerWidth = rect.width;
+          containerHeight = rect.height;
+        }
       }
       
-      // Wait a frame to ensure DOM is updated, then resize
+      // STEP 4: Wait for DOM to settle, then completely recalculate
       requestAnimationFrame(() => {
-        // Get fresh measurements again after DOM update
-        const freshRect = canvasContainer.getBoundingClientRect();
-        if (freshRect.width > 0 && freshRect.height > 0) {
-          containerWidth = freshRect.width;
-          containerHeight = freshRect.height;
+        // Get fresh measurements from the actual DOM
+        const centerPanel = container.closest(".gang-builder-center");
+        if (centerPanel) {
+          const centerRect = centerPanel.getBoundingClientRect();
+          containerWidth = centerRect.width;
+          containerHeight = centerRect.height;
+        } else {
+          const freshRect = canvasContainer.getBoundingClientRect();
+          if (freshRect.width > 0 && freshRect.height > 0) {
+            containerWidth = freshRect.width;
+            containerHeight = freshRect.height;
+          }
         }
-        // Resize canvas when sheet size changes - this will recalculate everything with new zoom
+        
+        // STEP 5: Force resize with fresh dimensions and correct zoom
+        // Reset the isResizing flag to allow resize
+        isResizing = false;
         resizeCanvas();
-        // Reposition controls after resize
+        
+        // STEP 6: Reposition controls
         positionZoomControls();
-      });
-      
-      // Scroll to top after resize completes
-      requestAnimationFrame(() => {
+        
+        // STEP 7: Scroll to top
         requestAnimationFrame(() => {
           if (canvasWrapper) {
             canvasWrapper.scrollTop = 0;
