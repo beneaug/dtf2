@@ -623,9 +623,18 @@ export function create(container) {
     // Preload any new design images
     state.designFiles.forEach((design) => {
       if (design.url && !imageCache.has(design.url)) {
-        preloadImage(design.url).catch(() => {
-          // Silently fail - will show placeholder in render
-        });
+        // Skip placeholder data URLs
+        if (!design.url.startsWith('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==')) {
+          preloadImage(design.url)
+            .then(() => {
+              // Re-render after image loads
+              render();
+            })
+            .catch((err) => {
+              console.warn('Failed to preload image:', design.url, err);
+              // Silently fail - will show placeholder in render
+            });
+        }
       }
     });
     

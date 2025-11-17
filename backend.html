@@ -526,6 +526,8 @@
             });
             
             let imageUrl = null;
+            let imageLoaded = false;
+            
             if (matchingFile) {
               try {
                 const fileIndex = orderFiles.indexOf(matchingFile);
@@ -533,6 +535,25 @@
                 const fileData = await res.json();
                 if (res.ok && fileData.ok && fileData.url) {
                   imageUrl = fileData.url;
+                  
+                  // Preload the image to ensure it's ready
+                  try {
+                    const img = new Image();
+                    img.crossOrigin = 'anonymous';
+                    await new Promise((resolve, reject) => {
+                      img.onload = () => {
+                        imageLoaded = true;
+                        resolve(img);
+                      };
+                      img.onerror = (err) => {
+                        console.warn('Failed to preload image:', file.name, err);
+                        resolve(null); // Continue even if image fails
+                      };
+                      img.src = imageUrl;
+                    });
+                  } catch (imgErr) {
+                    console.error('Error preloading image:', file.name, imgErr);
+                  }
                 }
               } catch (err) {
                 console.error('Error loading image URL:', err);
@@ -547,8 +568,12 @@
               naturalHeightPx: file.naturalHeightPx,
               widthIn: file.widthIn,
               heightIn: file.heightIn,
+              _imageLoaded: imageLoaded, // Track if image was successfully loaded
             };
           }));
+          
+          console.log('Loaded design files:', designFilesWithUrls.length);
+          console.log('  Files with images:', designFilesWithUrls.filter(f => f.url && !f.url.startsWith('data:')).length);
           
           // Initialize store with the gang sheet data
           storeModule.resetAll();
@@ -557,8 +582,26 @@
           
           // Add design files
           designFilesWithUrls.forEach(file => {
-            storeModule.addDesignFile(file);
+            // Remove internal tracking property before adding to store
+            const { _imageLoaded, ...fileForStore } = file;
+            storeModule.addDesignFile(fileForStore);
           });
+          
+          // Preload all images into the canvas component's cache before creating it
+          // We need to access the canvas component's preloadImage function
+          // Since we can't access it directly, we'll create the canvas first, then trigger image loading
+          
+          // Create the canvas component first
+          createCanvas(container);
+          
+          // Now preload all images by accessing the store and triggering renders
+          // The canvas component will handle image loading via its preloadImage function
+          // We need to wait a bit for the canvas to initialize, then trigger a render
+          setTimeout(() => {
+            // Force a re-render by updating the store (this will trigger canvas render)
+            const currentState = storeModule.getState();
+            storeModule.setSheetSize(currentState.selectedSheetSizeId);
+          }, 100);
           
           // Group instances by design, then add them using auto-pack and immediately update positions
           const instancesByDesign = {};
@@ -591,9 +634,6 @@
               }
             });
           }
-          
-          // Create the canvas component (read-only viewer)
-          createCanvas(container);
         } catch (err) {
           console.error('Failed to load gang sheet viewer:', err);
           container.innerHTML = '<p class="ops-detail-notes-body">Failed to load gang sheet viewer. Check console for details.</p>';

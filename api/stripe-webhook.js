@@ -79,113 +79,57 @@ module.exports = (req, res) => {
       const totalPriceCents =
         m.totalPriceCents != null ? parseInt(m.totalPriceCents, 10) : null;
       
-      // Check if we have a temp order ID - means order was created before checkout
-      const tempOrderId = m.tempOrderId ? parseInt(m.tempOrderId, 10) : null;
+      // STEP 1: Find existing order by orderId from metadata
+      // This is the primary and only reliable way to match orders
+      const orderId = m.orderId ? parseInt(m.orderId, 10) : null;
       let existingOrder = null;
       
-      console.log("Metadata tempOrderId:", m.tempOrderId, "parsed:", tempOrderId);
+      console.log("Processing webhook for session:", session.id);
+      console.log("Metadata orderId:", m.orderId, "parsed:", orderId);
       console.log("Metadata mode:", m.mode);
       
-      // Try to find existing order by tempOrderId first
-      if (tempOrderId) {
-        console.log("Looking for order by tempOrderId:", tempOrderId);
+      if (orderId) {
+        console.log("Looking for order by ID:", orderId);
         try {
           const checkClient = await pool.connect();
           try {
             const checkResult = await checkClient.query(
-              `SELECT id, gang_sheet_data, stripe_session_id, created_at FROM dtf_orders WHERE id = $1`,
-              [tempOrderId]
+              `SELECT id, gang_sheet_data, stripe_session_id, created_at, status 
+               FROM dtf_orders 
+               WHERE id = $1`,
+              [orderId]
             );
+            
             if (checkResult.rows.length > 0) {
               existingOrder = checkResult.rows[0];
               const hasGangSheetData = existingOrder.gang_sheet_data !== null;
               console.log("✓ Found existing order by ID:", existingOrder.id);
               console.log("  Created at:", existingOrder.created_at);
               console.log("  Current session_id:", existingOrder.stripe_session_id);
+              console.log("  Status:", existingOrder.status);
               console.log("  Has gang_sheet_data:", hasGangSheetData);
+              
               if (hasGangSheetData) {
-                const dataPreview = JSON.stringify(existingOrder.gang_sheet_data).substring(0, 100);
+                const dataPreview = JSON.stringify(existingOrder.gang_sheet_data).substring(0, 150);
                 console.log("  Data preview:", dataPreview);
-              } else {
-                console.error("WARNING: Existing order has NULL gang_sheet_data!");
               }
             } else {
-              console.error("Order not found by tempOrderId:", tempOrderId);
+              console.error("ERROR: Order not found by ID:", orderId);
             }
           } finally {
             checkClient.release();
           }
         } catch (dbErr) {
-          console.error("Failed to check for existing order:", dbErr);
-          console.error("Error details:", dbErr.message);
+          console.error("ERROR: Failed to check for existing order:", dbErr);
+          console.error("  Error details:", dbErr.message);
         }
-      }
-      
-      // Fallback: If mode is gang-sheet, find the most recent pending order with gang_sheet_data
-      // Match by files array to ensure we get the right one
-      if (!existingOrder && m.mode === 'gang-sheet' && files && files.length > 0) {
-        console.log("No order found by tempOrderId, searching by files array for gang-sheet order");
-        try {
-          const checkClient = await pool.connect();
-          try {
-            // Parse files from metadata to compare
-            let metadataFiles = [];
-            try {
-              metadataFiles = typeof m.files === 'string' ? JSON.parse(m.files) : m.files;
-            } catch (e) {
-              console.error("Failed to parse files from metadata:", e);
-            }
-            
-            // Find pending orders with gang_sheet_data and matching file count
-            const checkResult = await checkClient.query(
-              `SELECT id, gang_sheet_data, stripe_session_id, created_at, files
-               FROM dtf_orders 
-               WHERE stripe_session_id LIKE 'pending-%' 
-                 AND gang_sheet_data IS NOT NULL
-                 AND mode = 'gang-sheet'
-                 AND created_at > NOW() - INTERVAL '10 minutes'
-               ORDER BY created_at DESC
-               LIMIT 5`,
-              []
-            );
-            
-            // Find the one with matching files
-            for (const row of checkResult.rows) {
-              let orderFiles = [];
-              try {
-                orderFiles = typeof row.files === 'string' ? JSON.parse(row.files) : row.files;
-              } catch (e) {
-                continue;
-              }
-              
-              // Compare file counts and names
-              if (Array.isArray(orderFiles) && Array.isArray(metadataFiles) && 
-                  orderFiles.length === metadataFiles.length) {
-                const orderFileNames = orderFiles.map(f => f.filename || f.name || '').sort();
-                const metaFileNames = metadataFiles.map(f => f.filename || f.name || '').sort();
-                if (JSON.stringify(orderFileNames) === JSON.stringify(metaFileNames)) {
-                  existingOrder = row;
-                  console.log("✓ Found matching order by files array:", existingOrder.id);
-                  break;
-                }
-              }
-            }
-            
-            if (!existingOrder && checkResult.rows.length > 0) {
-              // Fallback to most recent if no exact match
-              existingOrder = checkResult.rows[0];
-              console.log("✓ Using most recent pending gang-sheet order:", existingOrder.id);
-            }
-          } finally {
-            checkClient.release();
-          }
-        } catch (dbErr) {
-          console.error("Failed to search for pending orders:", dbErr);
-        }
+      } else {
+        console.warn("WARNING: No orderId in metadata - cannot find existing order");
+        console.log("  Available metadata keys:", Object.keys(m));
       }
       
       if (!existingOrder) {
-        console.log("No existing order found - will create new one (regular order, not gang-sheet)");
+        console.log("No existing order found - will create new one (fallback for orders created before this update)");
       }
 
       // Extract shipping address from session
@@ -311,8 +255,9 @@ module.exports = (req, res) => {
             console.error("  This should not happen - session IDs should be unique");
           }
           
-          // Update the existing order - preserve gang_sheet_data (it's already saved)
-          // Only update if the order doesn't already have a real session_id (not a temp one)
+          // Update the existing order - ONLY update session_id and shipping_address
+          // DO NOT touch gang_sheet_data - it's already saved and correct
+          // Only update if session_id is still pending (not already completed)
           const shouldUpdate = !existingOrder.stripe_session_id || existingOrder.stripe_session_id.startsWith('pending-');
           
           if (shouldUpdate) {
@@ -323,23 +268,35 @@ module.exports = (req, res) => {
                    status = COALESCE(status, 'pending')
                WHERE id = $3
                  AND (stripe_session_id IS NULL OR stripe_session_id LIKE 'pending-%')
-               RETURNING id, shipping_address, gang_sheet_data`,
+               RETURNING id, shipping_address, gang_sheet_data, stripe_session_id`,
               [session.id, finalShippingAddressJson, existingOrder.id]
             );
             
             if (result.rowCount > 0) {
-              const savedGangSheetData = result.rows[0].gang_sheet_data;
-              console.log("✓ Updated existing order. Has gang_sheet_data:", savedGangSheetData ? "YES" : "NO - NULL!");
-              if (!savedGangSheetData && existingOrder.gang_sheet_data) {
-                console.error("ERROR: gang_sheet_data was lost during update!");
+              const updated = result.rows[0];
+              const hasGangSheetData = updated.gang_sheet_data !== null;
+              console.log("✓ Updated existing order");
+              console.log("  New session_id:", updated.stripe_session_id);
+              console.log("  Has gang_sheet_data:", hasGangSheetData);
+              
+              // Verify gang_sheet_data was preserved
+              if (!hasGangSheetData && existingOrder.gang_sheet_data) {
+                console.error("CRITICAL ERROR: gang_sheet_data was lost during update!");
+                console.error("  Original had data:", !!existingOrder.gang_sheet_data);
+                console.error("  Updated has data:", hasGangSheetData);
+              } else if (hasGangSheetData) {
+                console.log("  ✓ gang_sheet_data preserved successfully");
               }
             } else {
-              console.error("ERROR: Update returned 0 rows. Order may have already been updated.");
-              // Fall through to create new order
+              console.error("ERROR: Update returned 0 rows");
+              console.error("  Order ID:", existingOrder.id);
+              console.error("  Current session_id:", existingOrder.stripe_session_id);
+              // Fall through to create new order (shouldn't happen but handle gracefully)
               result = null;
             }
           } else {
             console.log("Order already has a real session_id, skipping update");
+            console.log("  Current session_id:", existingOrder.stripe_session_id);
             result = { rowCount: 0 };
           }
         } else {
