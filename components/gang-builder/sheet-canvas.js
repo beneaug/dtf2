@@ -91,26 +91,16 @@ export function create(container) {
     // Clear canvas (use actual canvas dimensions)
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Calculate base dimensions at base PPI
+    // Calculate base dimensions
     const baseSheetWidthPx = convertInchesToPixels(sheetSize.widthIn);
     const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
     
-    // Calculate what scale would fit the canvas, then multiply by zoom factor
-    const fitScaleX = displayWidth / baseSheetWidthPx;
-    const fitScaleY = displayHeight / baseSheetHeightPx;
-    const fitScale = Math.min(fitScaleX, fitScaleY);
+    // Calculate scale to fit sheet - with high PPI, this naturally gives large zoom
+    const scaleX = displayWidth / baseSheetWidthPx;
+    const scaleY = displayHeight / baseSheetHeightPx;
     
-    // Apply large zoom multiplier - this makes it much bigger
-    const zoomMultiplier = 5.0;
-    let scale = fitScale * zoomMultiplier;
-    
-    // Cap at 98% of canvas to prevent cutoff
-    const maxScaleX = (displayWidth * 1.4) / baseSheetWidthPx;
-    const maxScaleY = (displayHeight * 1.4) / baseSheetHeightPx;
-    const maxScale = Math.min(maxScaleX, maxScaleY);
-    if (scale > maxScale) {
-      scale = maxScale;
-    }
+    // Use the smaller scale to ensure it fits both dimensions
+    const scale = Math.min(scaleX, scaleY);
 
     const sheetWidthPx = baseSheetWidthPx * scale;
     const sheetHeightPx = baseSheetHeightPx * scale;
