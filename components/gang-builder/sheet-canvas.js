@@ -290,11 +290,24 @@ export function create(container) {
       dragStartX = mouseX;
       dragStartY = mouseY;
       dragInstanceId = instance.id;
+      
+      // Store the initial instance position when drag starts
+      const state = store.getState();
+      const inst = state.instances.find((i) => i.id === instance.id);
+      if (inst) {
+        dragStartInstanceX = inst.xIn;
+        dragStartInstanceY = inst.yIn;
+      }
+      
       store.setSelectedInstance(instance.id);
+      e.preventDefault(); // Prevent text selection
     } else {
       store.setSelectedInstance(null);
     }
   });
+
+  let dragStartInstanceX = 0;
+  let dragStartInstanceY = 0;
 
   canvas.addEventListener("mousemove", (e) => {
     if (!isDragging || !dragInstanceId) return;
@@ -311,12 +324,13 @@ export function create(container) {
     const instance = state.instances.find((i) => i.id === dragInstanceId);
     if (!instance) return;
 
-    // Calculate new position
+    // Calculate mouse movement in canvas coordinates
     const deltaX = (mouseX - dragStartX) / scale;
     const deltaY = (mouseY - dragStartY) / scale;
 
-    let newX = instance.xIn + convertPixelsToInches(deltaX);
-    let newY = instance.yIn + convertPixelsToInches(deltaY);
+    // Convert to inches and add to original position
+    let newX = dragStartInstanceX + convertPixelsToInches(deltaX);
+    let newY = dragStartInstanceY + convertPixelsToInches(deltaY);
 
     // Apply snapping
     if (state.snapIncrement > 0) {
@@ -324,10 +338,21 @@ export function create(container) {
       newY = snapToGrid(newY, state.snapIncrement);
     }
 
-    // Check bounds
+    // Check bounds (account for deadspace in bounds check)
     const sheetSize = getSheetSize(state.selectedSheetSizeId);
-    if (sheetSize && isWithinBounds(newX, newY, instance.widthIn, instance.heightIn, sheetSize.widthIn, sheetSize.heightIn)) {
-      store.updateInstance(dragInstanceId, { xIn: newX, yIn: newY });
+    if (sheetSize) {
+      const deadspaceIn = 0.157; // 4mm
+      // Check if the instance (with deadspace) fits within bounds
+      if (isWithinBounds(
+        newX - deadspaceIn,
+        newY - deadspaceIn,
+        instance.widthIn + (deadspaceIn * 2),
+        instance.heightIn + (deadspaceIn * 2),
+        sheetSize.widthIn,
+        sheetSize.heightIn
+      )) {
+        store.updateInstance(dragInstanceId, { xIn: newX, yIn: newY });
+      }
     }
   });
 
