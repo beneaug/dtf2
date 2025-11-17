@@ -203,11 +203,11 @@ export function create(container) {
       ctx.lineWidth = isSelected ? 2 : 1;
       ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
 
-      // Draw design image (if loaded)
+      // Draw design image (if loaded) - draw at actual position (not including deadspace in image position)
       if (design.url) {
         const cachedImg = imageCache.get(design.url);
         if (cachedImg && cachedImg.complete && cachedImg.naturalWidth > 0) {
-          // Image is cached and loaded, draw it
+          // Image is cached and loaded, draw it at the instance position (not the box position)
           ctx.save();
           ctx.translate(x + width / 2, y + height / 2);
           if (instance.rotationDeg) {

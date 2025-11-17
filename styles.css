@@ -1495,6 +1495,12 @@ body {
   width: 80px;
 }
 
+.gang-auto-pack-max {
+  font-size: 0.7rem;
+  color: #a0a0a0;
+  margin-top: 0.25rem;
+}
+
 .gang-select,
 .gang-input {
   background: rgba(10, 11, 15, 0.9);

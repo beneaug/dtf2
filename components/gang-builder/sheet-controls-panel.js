@@ -8,6 +8,7 @@ import * as store from "../../lib/gang-builder/store.js";
 import * as pricing from "../../lib/gang-builder/pricing.js";
 import { SHEET_SIZES } from "../../lib/gang-builder/config.js";
 import { addToCart } from "../../lib/gang-builder/cart.js";
+import { autoPackDesign } from "../../lib/gang-builder/layout.js";
 
 /**
  * Create the controls panel
@@ -146,23 +147,43 @@ export function create(container) {
   // Auto-pack controls - now using individual components per design
   const autoPackList = container.querySelector("#gang-auto-pack-list");
   
+  // Store quantity values and max instances per design
+  const quantityValues = new Map();
+  const maxInstancesMap = new Map();
+
   function updateAutoPackList(designFiles) {
-    autoPackList.innerHTML = "";
-    
     if (designFiles.length === 0) {
       autoPackList.innerHTML = '<p class="gang-empty-state">No designs uploaded yet</p>';
       return;
     }
     
+    // Preserve existing quantity values
+    const existingItems = autoPackList.querySelectorAll(".gang-auto-pack-item");
+    existingItems.forEach((item) => {
+      const qtyInput = item.querySelector(".gang-auto-pack-qty");
+      const designId = qtyInput?.dataset.designId;
+      if (designId && qtyInput) {
+        quantityValues.set(designId, qtyInput.value);
+      }
+    });
+    
+    autoPackList.innerHTML = "";
+    
     designFiles.forEach((design) => {
       const item = document.createElement("div");
       item.className = "gang-auto-pack-item";
+      
+      // Get saved quantity or default to 1
+      const savedQty = quantityValues.get(design.id) || "1";
+      const maxInstances = maxInstancesMap.get(design.id) || 9999;
+      
       item.innerHTML = `
         <div class="gang-auto-pack-label">${design.name}</div>
         <div class="gang-auto-pack-controls">
-          <input type="number" class="gang-input gang-auto-pack-qty" data-design-id="${design.id}" min="1" value="1" placeholder="Qty" />
+          <input type="number" class="gang-input gang-auto-pack-qty" data-design-id="${design.id}" min="1" max="${maxInstances}" value="${savedQty}" placeholder="Qty" />
           <button class="gang-btn gang-btn-secondary gang-auto-pack-btn" data-design-id="${design.id}">Auto-pack</button>
         </div>
+        ${maxInstances < 9999 ? `<div class="gang-auto-pack-max">Max: ${maxInstances}</div>` : ''}
       `;
       
       const qtyInput = item.querySelector(".gang-auto-pack-qty");
@@ -170,7 +191,15 @@ export function create(container) {
       
       packBtn.addEventListener("click", () => {
         const qty = parseInt(qtyInput.value, 10) || 1;
-        store.addInstancesForDesign(design.id, qty, true);
+        const result = store.addInstancesForDesign(design.id, qty, true);
+        if (result && result.maxInstances) {
+          maxInstancesMap.set(design.id, result.maxInstances);
+          qtyInput.max = result.maxInstances;
+          // Update the max display
+          updateAutoPackList(designFiles);
+        }
+        // Preserve the entered quantity
+        quantityValues.set(design.id, qtyInput.value);
       });
       
       autoPackList.appendChild(item);
@@ -314,6 +343,30 @@ export function create(container) {
       const design = state.designFiles.find((d) => d.id === designId);
       updateSizeControls(design);
     });
+
+    // Recalculate max instances when sheet size or design sizes change
+    const sheetSize = state.selectedSheetSizeId 
+      ? SHEET_SIZES.find((s) => s.id === state.selectedSheetSizeId)
+      : null;
+    
+    if (sheetSize) {
+      state.designFiles.forEach((design) => {
+        const designWidthIn = design.widthIn || design.naturalWidthPx / 300;
+        const designHeightIn = design.heightIn || design.naturalHeightPx / 300;
+        
+        // Calculate max instances using the auto-pack algorithm
+        const result = autoPackDesign({
+          sheetWidthIn: sheetSize.widthIn,
+          sheetHeightIn: sheetSize.heightIn,
+          designWidthIn,
+          designHeightIn,
+          quantity: 9999, // Use large number to get max
+          tryRotated: true,
+        });
+        
+        maxInstancesMap.set(design.id, result.maxInstances);
+      });
+    }
 
     // Update auto-pack list
     updateAutoPackList(state.designFiles);
