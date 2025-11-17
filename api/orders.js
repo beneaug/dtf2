@@ -114,6 +114,9 @@ module.exports = (req, res) => {
               quantity,
             },
           ],
+          shipping_address_collection: {
+            allowed_countries: ["US", "CA"],
+          },
           metadata: {
             mode,
             size,

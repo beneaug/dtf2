@@ -65,13 +65,37 @@ module.exports = (req, res) => {
       const totalPriceCents =
         m.totalPriceCents != null ? parseInt(m.totalPriceCents, 10) : null;
 
+      // Extract shipping address from session
+      // Retrieve full session to ensure we have shipping details
+      let shippingAddress = null;
+      try {
+        const fullSession = await stripe.checkout.sessions.retrieve(session.id, {
+          expand: ['customer_details', 'shipping_details'],
+        });
+        
+        if (fullSession.shipping_details && fullSession.shipping_details.address) {
+          const addr = fullSession.shipping_details.address;
+          shippingAddress = {
+            name: fullSession.shipping_details.name || null,
+            line1: addr.line1 || null,
+            line2: addr.line2 || null,
+            city: addr.city || null,
+            state: addr.state || null,
+            postal_code: addr.postal_code || null,
+            country: addr.country || null,
+          };
+        }
+      } catch (err) {
+        console.error("Failed to retrieve full session for shipping address:", err);
+      }
+
       const client = await pool.connect();
       try {
         const result = await client.query(
           `INSERT INTO dtf_orders
              (mode, size, quantity, transfer_name, garment_color, notes,
-              files, unit_price_cents, total_price_cents, stripe_session_id, status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending')
+              files, unit_price_cents, total_price_cents, stripe_session_id, status, shipping_address)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11)
            ON CONFLICT (stripe_session_id) DO NOTHING
            RETURNING id`,
           [
@@ -85,6 +109,7 @@ module.exports = (req, res) => {
             unitPriceCents,
             totalPriceCents,
             session.id,
+            shippingAddress ? JSON.stringify(shippingAddress) : null,
           ]
         );
 

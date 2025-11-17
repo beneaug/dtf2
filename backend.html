@@ -302,6 +302,36 @@
           </section>
 
           <section class="ops-detail-notes">
+            <h4 class="ops-detail-section-heading">Shipping address</h4>
+            <p class="ops-detail-notes-body">
+              ${
+                order.shipping_address
+                  ? (() => {
+                      try {
+                        const addr = typeof order.shipping_address === 'string' 
+                          ? JSON.parse(order.shipping_address) 
+                          : order.shipping_address;
+                        const parts = [];
+                        if (addr.name) parts.push(addr.name);
+                        if (addr.line1) parts.push(addr.line1);
+                        if (addr.line2) parts.push(addr.line2);
+                        const cityState = [addr.city, addr.state].filter(Boolean).join(', ');
+                        if (cityState) parts.push(cityState);
+                        const zipCountry = [addr.postal_code, addr.country].filter(Boolean).join(' ');
+                        if (zipCountry) parts.push(zipCountry);
+                        return parts.length > 0 
+                          ? parts.join('<br>') 
+                          : 'No shipping address provided.';
+                      } catch (e) {
+                        return 'Shipping address unavailable.';
+                      }
+                    })()
+                  : 'No shipping address collected for this order.'
+              }
+            </p>
+          </section>
+
+          <section class="ops-detail-notes">
             <h4 class="ops-detail-section-heading">Operator notes</h4>
             <p class="ops-detail-notes-body">
               ${order.notes ? order.notes : "No notes supplied with this job."}
