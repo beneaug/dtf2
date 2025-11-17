@@ -100,34 +100,40 @@ export function create(container) {
     const baseSheetWidthPx = convertInchesToPixels(sheetSize.widthIn);
     const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
     
-    // Use a fixed minimum target size for the sheet (ensures large preview)
-    // This makes the sheet always render at a large size, may overflow canvas
-    const MIN_SHEET_WIDTH = 650; // Minimum width in pixels for large preview
-    const MIN_SHEET_HEIGHT = 400; // Minimum height in pixels
-    
-    // Calculate scale to reach minimum size
-    const scaleForMinWidth = MIN_SHEET_WIDTH / baseSheetWidthPx;
-    const scaleForMinHeight = MIN_SHEET_HEIGHT / baseSheetHeightPx;
-    
-    // Use the larger scale to ensure we hit minimum size
-    let scale = Math.max(scaleForMinWidth, scaleForMinHeight);
-    
-    // But also check if we can fit in canvas - if so, use that for better fit
-    const fitScaleX = (displayWidth * 0.98) / baseSheetWidthPx;
-    const fitScaleY = (displayHeight * 0.98) / baseSheetHeightPx;
+    // Calculate scale to fit in canvas (with some padding)
+    const fitScaleX = (displayWidth * 0.95) / baseSheetWidthPx;
+    const fitScaleY = (displayHeight * 0.95) / baseSheetHeightPx;
     const fitScale = Math.min(fitScaleX, fitScaleY);
     
-    // Use whichever is larger - ensures minimum size OR fits canvas if canvas is huge
-    scale = Math.max(scale, fitScale);
+    // For very small sheets, ensure a minimum readable size
+    const MIN_SHEET_WIDTH = 400; // Minimum width in pixels
+    const MIN_SHEET_HEIGHT = 300; // Minimum height in pixels
+    
+    const scaleForMinWidth = MIN_SHEET_WIDTH / baseSheetWidthPx;
+    const scaleForMinHeight = MIN_SHEET_HEIGHT / baseSheetHeightPx;
+    const minScale = Math.max(scaleForMinWidth, scaleForMinHeight);
+    
+    // Use fit scale, but don't go below minimum for small sheets
+    // For large sheets, fitScale will be smaller, so we use that
+    // For small sheets, minScale will be larger, so we use that
+    const scale = Math.max(fitScale, minScale);
 
     const sheetWidthPx = baseSheetWidthPx * scale;
     const sheetHeightPx = baseSheetHeightPx * scale;
     
-    // Position sheet at top-left (with padding from wrapper)
-    // The wrapper has padding: 2rem, so we account for that
+    // Position sheet - center if it fits, otherwise top-left for scrolling
     const paddingPx = 32; // 2rem = 32px
-    const offsetX = paddingPx;
-    const offsetY = paddingPx;
+    let offsetX, offsetY;
+    
+    if (sheetWidthPx + paddingPx * 2 <= displayWidth && sheetHeightPx + paddingPx * 2 <= displayHeight) {
+      // Sheet fits in viewport - center it
+      offsetX = (displayWidth - sheetWidthPx) / 2;
+      offsetY = (displayHeight - sheetHeightPx) / 2;
+    } else {
+      // Sheet is larger than viewport - position at top-left for scrolling
+      offsetX = paddingPx;
+      offsetY = paddingPx;
+    }
     
     // Resize canvas to fit the sheet if it's larger than display
     const neededCanvasWidth = Math.max(displayWidth, sheetWidthPx + offsetX * 2);
