@@ -66,11 +66,6 @@ export function create(container) {
   
   // Zoom state (1.0 = 100%, 1.25 = 125%, etc.)
   let zoomLevel = initialZoom;
-  
-  // Robust state management for sheet size changes
-  let pendingSheetSizeId = null;
-  let sheetSizeChangeTimeout = null;
-  let isProcessingSheetSizeChange = false;
 
   let isDragging = false;
   let dragStartX = 0;
@@ -102,203 +97,83 @@ export function create(container) {
   let containerWidth = 0;
   let containerHeight = 0;
   let isResizing = false; // Prevent recursive resize calls
-  let pendingResizeFrame = null; // Track pending resize animation frame
-  
-  // Process sheet size change with complete state reset
-  function processSheetSizeChange(newSheetSizeId) {
-    if (isProcessingSheetSizeChange) {
-      // If already processing, queue this one
-      pendingSheetSizeId = newSheetSizeId;
-      return;
-    }
-    
-    isProcessingSheetSizeChange = true;
-    
-    // Cancel ALL pending operations
-    if (pendingResizeFrame !== null) {
-      cancelAnimationFrame(pendingResizeFrame);
-      pendingResizeFrame = null;
-    }
-    if (pendingZoomFrame !== null) {
-      cancelAnimationFrame(pendingZoomFrame);
-      pendingZoomFrame = null;
-    }
-    if (sheetSizeChangeTimeout !== null) {
-      clearTimeout(sheetSizeChangeTimeout);
-      sheetSizeChangeTimeout = null;
-    }
-    
-    // Reset all flags
-    isResizing = false;
-    isZooming = false;
-    
-    // Update tracked sheet size
-    lastSheetSizeId = newSheetSizeId;
-    
-    // Reset zoom to recommended level for this sheet size
-    const defaultZoom = getDefaultZoomForSheetSize(newSheetSizeId);
-    zoomLevel = defaultZoom;
-    updateZoomDisplay();
-    
-    // COMPLETELY RESET canvas and container - clear all inline styles
-    canvasContainer.style.width = '';
-    canvasContainer.style.height = '';
-    canvas.style.width = '';
-    canvas.style.height = '';
-    
-    // Force a layout recalculation by reading layout properties
-    void canvasWrapper.offsetHeight;
-    void canvasContainer.offsetHeight;
-    
-    // Wait for DOM to settle, then get FRESH dimensions and resize
-    pendingResizeFrame = requestAnimationFrame(() => {
-      pendingResizeFrame = requestAnimationFrame(() => {
-        pendingResizeFrame = null;
-        
-        // ALWAYS get fresh container dimensions from the wrapper - NEVER use cached
-        const wrapperRect = canvasWrapper.getBoundingClientRect();
-        if (wrapperRect.width > 0 && wrapperRect.height > 0) {
-          // Use wrapper dimensions minus padding for container
-          // ALWAYS recalculate - never trust cached values
-          containerWidth = Math.max(100, wrapperRect.width - 64); // Account for padding, min 100px
-          containerHeight = Math.max(100, wrapperRect.height - 64);
-        } else {
-          // Fallback: get from center panel
-          const centerPanel = container.closest(".gang-builder-center");
-          if (centerPanel) {
-            const centerRect = centerPanel.getBoundingClientRect();
-            containerWidth = Math.max(100, centerRect.width - 64);
-            containerHeight = Math.max(100, centerRect.height - 64);
-          } else {
-            // Last resort: use canvasContainer
-            const rect = canvasContainer.getBoundingClientRect();
-            if (rect.width > 0 && rect.height > 0) {
-              containerWidth = Math.max(100, rect.width);
-              containerHeight = Math.max(100, rect.height);
-            }
-          }
-        }
-        
-        // Ensure flags are reset before resize
-        isResizing = false;
-        resizeCanvas();
-        
-        // Reposition controls and scroll to top
-        positionZoomControls();
-        requestAnimationFrame(() => {
-          if (canvasWrapper) {
-            canvasWrapper.scrollTop = 0;
-            canvasWrapper.scrollLeft = 0;
-          }
-          
-          // Mark processing as complete
-          isProcessingSheetSizeChange = false;
-          
-          // If there's a newer pending change, process it
-          if (pendingSheetSizeId !== null && pendingSheetSizeId !== lastSheetSizeId) {
-            const nextSheetSizeId = pendingSheetSizeId;
-            pendingSheetSizeId = null;
-            processSheetSizeChange(nextSheetSizeId);
-          }
-        });
-      });
-    });
-  }
   
   // Resize canvas to fit container with high DPI support
   function resizeCanvas() {
     // Prevent recursive calls
     if (isResizing) return;
     
-    // ALWAYS get fresh container dimensions - NEVER trust cached values
-    let actualWidth = 0;
-    let actualHeight = 0;
-    
+    // ALWAYS get fresh container dimensions from wrapper - NEVER use cached values
     const wrapperRect = canvasWrapper.getBoundingClientRect();
-    if (wrapperRect.width > 0 && wrapperRect.height > 0) {
-      actualWidth = Math.max(100, wrapperRect.width - 64); // Account for padding, min 100px
-      actualHeight = Math.max(100, wrapperRect.height - 64);
-    } else {
-      // Fallback: get from center panel
-      const centerPanel = container.closest(".gang-builder-center");
-      if (centerPanel) {
-        const centerRect = centerPanel.getBoundingClientRect();
-        actualWidth = Math.max(100, centerRect.width - 64);
-        actualHeight = Math.max(100, centerRect.height - 64);
-      } else {
-        // Last resort: use canvasContainer
-        const rect = canvasContainer.getBoundingClientRect();
-        actualWidth = Math.max(100, rect.width);
-        actualHeight = Math.max(100, rect.height);
-      }
-    }
-    
-    // Ensure we have valid dimensions
-    if (actualWidth > 0 && actualHeight > 0) {
-      isResizing = true;
-      
-      // Store container dimensions (for reference, but we'll always remeasure)
-      containerWidth = actualWidth;
-      containerHeight = actualHeight;
-      
-      // Use device pixel ratio for high DPI displays
-      const dpr = window.devicePixelRatio || 1;
-      
-      // Calculate needed canvas size based on sheet size and zoom
-      const state = store.getState();
-      const sheetSize = getSheetSize(state.selectedSheetSizeId);
-      if (sheetSize) {
-        const baseSheetWidthPx = convertInchesToPixels(sheetSize.widthIn);
-        const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
-        
-        // Calculate base scale to fit in container (with some padding)
-        const fitScaleX = (actualWidth * 0.95) / baseSheetWidthPx;
-        const fitScaleY = (actualHeight * 0.95) / baseSheetHeightPx;
-        const baseScale = Math.min(fitScaleX, fitScaleY);
-        
-        // Apply zoom level - use current zoomLevel value directly, no accumulation
-        const scale = baseScale * zoomLevel;
-        
-        const sheetWidthPx = baseSheetWidthPx * scale;
-        const sheetHeightPx = baseSheetHeightPx * scale;
-        
-        const paddingPx = 32;
-        // Canvas needs to be large enough for the zoomed sheet
-        // BUT: cap it to prevent it from becoming absurdly large
-        const maxCanvasWidth = actualWidth * 10; // Cap at 10x container width
-        const maxCanvasHeight = actualHeight * 10; // Cap at 10x container height
-        const neededWidth = Math.min(maxCanvasWidth, Math.max(actualWidth, sheetWidthPx + paddingPx * 2));
-        const neededHeight = Math.min(maxCanvasHeight, Math.max(actualHeight, sheetHeightPx + paddingPx * 2));
-        
-        // Set canvas size
-        canvas.width = neededWidth * dpr;
-        canvas.height = neededHeight * dpr;
-        canvas.style.width = neededWidth + 'px';
-        canvas.style.height = neededHeight + 'px';
-        
-        // Also ensure container is large enough to show full canvas
-        canvasContainer.style.width = neededWidth + 'px';
-        canvasContainer.style.height = neededHeight + 'px';
-      } else {
-        // No sheet size selected, use container size
-        canvas.width = actualWidth * dpr;
-        canvas.height = actualHeight * dpr;
-        canvas.style.width = actualWidth + 'px';
-        canvas.style.height = actualHeight + 'px';
-        canvasContainer.style.width = actualWidth + 'px';
-        canvasContainer.style.height = actualHeight + 'px';
-      }
-      
-      // Reset transform and scale the context to match DPR
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.scale(dpr, dpr);
-      
-      render();
-      isResizing = false;
-    } else {
+    if (wrapperRect.width <= 0 || wrapperRect.height <= 0) {
       // Retry after a short delay if container isn't sized yet
       setTimeout(() => resizeCanvas(), 50);
+      return;
     }
+    
+    isResizing = true;
+    
+    // Calculate available container space (wrapper minus padding)
+    const availableWidth = Math.max(100, wrapperRect.width - 64); // Min 100px, account for 2rem padding
+    const availableHeight = Math.max(100, wrapperRect.height - 64);
+    
+    // Store for reference (but we always use fresh measurements above)
+    containerWidth = availableWidth;
+    containerHeight = availableHeight;
+    
+    // Use device pixel ratio for high DPI displays
+    const dpr = window.devicePixelRatio || 1;
+    
+    // Calculate needed canvas size based on sheet size and zoom
+    const state = store.getState();
+    const sheetSize = getSheetSize(state.selectedSheetSizeId);
+    if (sheetSize) {
+      const baseSheetWidthPx = convertInchesToPixels(sheetSize.widthIn);
+      const baseSheetHeightPx = convertInchesToPixels(sheetSize.heightIn);
+      
+      // Calculate base scale to fit in available container space (with 5% padding)
+      const fitScaleX = (availableWidth * 0.95) / baseSheetWidthPx;
+      const fitScaleY = (availableHeight * 0.95) / baseSheetHeightPx;
+      const baseScale = Math.min(fitScaleX, fitScaleY);
+      
+      // Apply zoom level
+      const scale = baseScale * zoomLevel;
+      
+      const sheetWidthPx = baseSheetWidthPx * scale;
+      const sheetHeightPx = baseSheetHeightPx * scale;
+      
+      const paddingPx = 32;
+      // Canvas size: sheet + padding, but NEVER exceed viewport
+      const maxCanvasWidth = availableWidth * 1.5; // Cap at 1.5x container width
+      const maxCanvasHeight = availableHeight * 1.5; // Cap at 1.5x container height
+      const neededWidth = Math.min(maxCanvasWidth, Math.max(availableWidth, sheetWidthPx + paddingPx * 2));
+      const neededHeight = Math.min(maxCanvasHeight, Math.max(availableHeight, sheetHeightPx + paddingPx * 2));
+      
+      // Set canvas size
+      canvas.width = neededWidth * dpr;
+      canvas.height = neededHeight * dpr;
+      canvas.style.width = neededWidth + 'px';
+      canvas.style.height = neededHeight + 'px';
+      
+      // Container matches canvas size
+      canvasContainer.style.width = neededWidth + 'px';
+      canvasContainer.style.height = neededHeight + 'px';
+    } else {
+      // No sheet size selected, use container size
+      canvas.width = availableWidth * dpr;
+      canvas.height = availableHeight * dpr;
+      canvas.style.width = availableWidth + 'px';
+      canvas.style.height = availableHeight + 'px';
+      canvasContainer.style.width = availableWidth + 'px';
+      canvasContainer.style.height = availableHeight + 'px';
+    }
+    
+    // Reset transform and scale the context to match DPR
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr, dpr);
+    
+    render();
+    isResizing = false;
   }
 
   // Render the sheet and instances
@@ -667,17 +542,10 @@ export function create(container) {
   }
 
   let isZooming = false; // Prevent recursive zoom calls
-  let pendingZoomFrame = null; // Track pending zoom animation frame
   
   function setZoom(level) {
     // Prevent recursive calls
     if (isZooming) return;
-    
-    // Cancel any pending zoom operations
-    if (pendingZoomFrame !== null) {
-      cancelAnimationFrame(pendingZoomFrame);
-      pendingZoomFrame = null;
-    }
     
     // Clamp zoom between 0.25x (25%) and 4x (400%)
     const newZoom = Math.max(0.25, Math.min(4.0, level));
@@ -688,13 +556,10 @@ export function create(container) {
     updateZoomDisplay();
     
     // Resize canvas to accommodate new zoom level
-    // Reset isResizing to allow resize during zoom
-    isResizing = false;
     resizeCanvas();
     
     // Reposition controls after resize (they should stay fixed)
-    pendingZoomFrame = requestAnimationFrame(() => {
-      pendingZoomFrame = null;
+    requestAnimationFrame(() => {
       positionZoomControls();
       isZooming = false;
     });
@@ -726,31 +591,37 @@ export function create(container) {
       }
     });
     
-    // Robust sheet size change handling with debouncing
-    const currentSheetSizeId = state.selectedSheetSizeId;
-    const sheetSizeChanged = lastSheetSizeId !== null && lastSheetSizeId !== currentSheetSizeId;
-    
+    // If sheet size changed, reset zoom and resize canvas
+    const sheetSizeChanged = lastSheetSizeId !== null && lastSheetSizeId !== state.selectedSheetSizeId;
     if (sheetSizeChanged) {
-      // Store the new sheet size (always use the latest)
-      pendingSheetSizeId = currentSheetSizeId;
+      lastSheetSizeId = state.selectedSheetSizeId;
       
-      // Clear any existing timeout
-      if (sheetSizeChangeTimeout !== null) {
-        clearTimeout(sheetSizeChangeTimeout);
-        sheetSizeChangeTimeout = null;
-      }
+      // Reset zoom to recommended level for this sheet size
+      const defaultZoom = getDefaultZoomForSheetSize(state.selectedSheetSizeId);
+      zoomLevel = defaultZoom;
+      updateZoomDisplay();
       
-      // Debounce: wait a short time to see if another change comes in
-      sheetSizeChangeTimeout = setTimeout(() => {
-        // Only process if this is still the latest change
-        if (pendingSheetSizeId === currentSheetSizeId && !isProcessingSheetSizeChange) {
-          processSheetSizeChange(pendingSheetSizeId);
-        }
-        sheetSizeChangeTimeout = null;
-      }, 50); // 50ms debounce
+      // Clear canvas container inline styles to reset dimensions
+      canvasContainer.style.width = '';
+      canvasContainer.style.height = '';
+      
+      // Reset flags to allow fresh resize
+      isResizing = false;
+      
+      // Wait for DOM to settle, then resize with fresh measurements
+      requestAnimationFrame(() => {
+        resizeCanvas(); // This will get fresh dimensions from wrapper
+        positionZoomControls();
+        requestAnimationFrame(() => {
+          if (canvasWrapper) {
+            canvasWrapper.scrollTop = 0;
+            canvasWrapper.scrollLeft = 0;
+          }
+        });
+      });
     } else {
       // Just render, don't resize
-      lastSheetSizeId = currentSheetSizeId;
+      lastSheetSizeId = state.selectedSheetSizeId;
       render();
     }
   });
