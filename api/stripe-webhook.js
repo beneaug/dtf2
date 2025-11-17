@@ -70,10 +70,18 @@ module.exports = (req, res) => {
       // Webhook events may not include shipping_details by default
       let shippingAddress = null;
       
+      console.log("Processing webhook for session:", session.id);
+      console.log("Session object keys:", Object.keys(session));
+      console.log("Session shipping_address_collection:", session.shipping_address_collection);
+      console.log("Session shipping_details (from event):", session.shipping_details);
+      
       try {
         const fullSession = await stripe.checkout.sessions.retrieve(session.id, {
           expand: ['customer_details', 'shipping_details'],
         });
+        
+        console.log("Retrieved full session. shipping_details:", fullSession.shipping_details);
+        console.log("Full session customer_details:", fullSession.customer_details);
         
         if (fullSession.shipping_details && fullSession.shipping_details.address) {
           const addr = fullSession.shipping_details.address;
@@ -86,7 +94,7 @@ module.exports = (req, res) => {
             postal_code: addr.postal_code || null,
             country: addr.country || null,
           };
-          console.log("Shipping address retrieved from session:", shippingAddress);
+          console.log("✓ Shipping address retrieved from session:", JSON.stringify(shippingAddress));
         } else {
           // Also check if it's in the webhook event object
           if (session.shipping_details && session.shipping_details.address) {
@@ -100,15 +108,21 @@ module.exports = (req, res) => {
               postal_code: addr.postal_code || null,
               country: addr.country || null,
             };
-            console.log("Shipping address found in webhook event:", shippingAddress);
+            console.log("✓ Shipping address found in webhook event:", JSON.stringify(shippingAddress));
           } else {
-            console.log("No shipping details found in session:", session.id);
-            console.log("Full session shipping_details:", fullSession.shipping_details);
-            console.log("Webhook session shipping_details:", session.shipping_details);
+            console.log("✗ No shipping details found in session:", session.id);
+            console.log("Full session shipping_details:", JSON.stringify(fullSession.shipping_details));
+            console.log("Webhook session shipping_details:", JSON.stringify(session.shipping_details));
+            console.log("Full session object (relevant fields):", {
+              shipping_address_collection: fullSession.shipping_address_collection,
+              shipping: fullSession.shipping,
+              customer_details: fullSession.customer_details,
+            });
           }
         }
       } catch (err) {
         console.error("Failed to retrieve full session for shipping address:", err);
+        console.error("Error stack:", err.stack);
         // Fallback: check if shipping_details is in the webhook event
         if (session.shipping_details && session.shipping_details.address) {
           const addr = session.shipping_details.address;
@@ -121,7 +135,7 @@ module.exports = (req, res) => {
             postal_code: addr.postal_code || null,
             country: addr.country || null,
           };
-          console.log("Shipping address found in webhook event (fallback):", shippingAddress);
+          console.log("✓ Shipping address found in webhook event (fallback):", JSON.stringify(shippingAddress));
         }
       }
 
