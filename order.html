@@ -42,45 +42,6 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body class="order-body">
-    <!--
-      Inject definitions for SVG filters used by the peel preview effect.
-      These filters are referenced from styles.css via url(#dropShadow),
-      url(#pointLight), url(#pointLightFlipped) and url(#expandAndFill).
-      Keeping them in the DOM avoids undefined filter errors when the
-      preview is rendered.  They occupy no space as the svg has width
-      and height of zero.
-    -->
-    <svg width="0" height="0" style="position:absolute">
-      <defs>
-        <filter id="pointLight">
-          <feGaussianBlur stdDeviation="1" result="blur" />
-          <feSpecularLighting result="spec" in="blur" specularExponent="100" specularConstant="0.1" lighting-color="white">
-            <fePointLight x="100" y="100" z="300" />
-          </feSpecularLighting>
-          <feComposite in="spec" in2="SourceGraphic" operator="screen" result="lit" />
-          <feComposite in="lit" in2="SourceAlpha" operator="in" />
-        </filter>
-        <filter id="pointLightFlipped">
-          <feGaussianBlur stdDeviation="10" result="blur" />
-          <feSpecularLighting result="spec" in="blur" specularExponent="100" specularConstant="0.7" lighting-color="white">
-            <!-- ID used by JS to move the highlight for the flipped flap -->
-            <fePointLight x="100" y="100" z="300" id="fePointLightFlipped" />
-          </feSpecularLighting>
-          <feComposite in="spec" in2="SourceGraphic" operator="screen" result="lit" />
-          <feComposite in="lit" in2="SourceAlpha" operator="in" />
-        </filter>
-        <filter id="dropShadow">
-          <feDropShadow dx="2" dy="4" stdDeviation="3" flood-color="black" flood-opacity="0.6" />
-        </filter>
-        <!-- Note: expandAndFill included for future features; currently unused -->
-        <filter id="expandAndFill">
-          <feOffset dx="0" dy="0" in="SourceAlpha" result="shape" />
-          <feFlood flood-color="rgb(179, 179, 179)" result="flood" />
-          <feComposite operator="in" in="flood" in2="shape" />
-        </filter>
-      </defs>
-    </svg>
-
     <div class="page-root">
       <div class="bg-gradient-root">
         <div class="bg-gradient-wrapper">
@@ -124,7 +85,26 @@
                   accept=".jpg,.jpeg,.png,.gif,.bmp,.eps,.pdf,.ai,.svg,.psd,.tif,.tiff"
                 />
               </label>
-              <div class="order-upload-preview" aria-hidden="true"></div>
+              <div class="order-upload-preview" aria-hidden="true">
+                <div class="draggable">
+                  <div class="sticker-container">
+                    <div class="sticker-main">
+                      <div class="sticker-lighting">
+                        <img src="" alt="Artwork preview" class="sticker-image" id="artwork-preview-image" draggable="false" oncontextmenu="return false" />
+                      </div>
+                    </div>
+                    <div class="shadow">
+                      <div class="flap">
+                      </div>
+                    </div>
+                    <div class="flap">
+                      <div class="flap-lighting">
+                        <div class="transfer-overlay"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
               <p class="order-upload-meta">
                 Supports: JPG, PNG, GIF, BMP, EPS, PDF, AI, SVG, PSD, TIF, TIFF
               </p>
@@ -277,6 +257,34 @@
       updateOrderGradientMobile();
     })();
   </script>
+  <svg height="0" width="0">
+    <defs>
+      <filter id="pointLight">
+        <feGaussianBlur stdDeviation="1" result="blur" />
+        <feSpecularLighting result="spec" in="blur" specularExponent="100" specularConstant="0.1" lightingColor="white">
+          <fePointLight x="100" y="100" z="300" />
+        </feSpecularLighting>
+        <feComposite in="spec" in2="SourceGraphic" operator="screen" result="lit" />
+        <feComposite in="lit" in2="SourceAlpha" operator="in" />
+      </filter>
+      <filter id="pointLightFlipped">
+        <feGaussianBlur stdDeviation="10" result="blur" />
+        <feSpecularLighting result="spec" in="blur" specularExponent="100" specularConstant="0.7" lightingColor="white">
+          <fePointLight x="100" y="100" z="300" id="fePointLightFlipped" />
+        </feSpecularLighting>
+        <feComposite in="spec" in2="SourceGraphic" operator="screen" result="lit" />
+        <feComposite in="lit" in2="SourceAlpha" operator="in" />
+      </filter>
+      <filter id="dropShadow">
+        <feDropShadow dx="2" dy="4" stdDeviation="3" flood-color="black" flood-opacity="0.6" />
+      </filter>
+      <filter id="expandAndFill">
+        <feOffset dx="0" dy="0" in="SourceAlpha" result="shape" />
+        <feFlood flood-color="rgb(179, 179, 179)" result="flood" />
+        <feComposite operator="in" in="flood" in2="shape" />
+      </filter>
+    </defs>
+  </svg>
   </body>
 </html>
 

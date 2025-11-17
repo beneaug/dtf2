@@ -2,6 +2,72 @@ document.addEventListener("DOMContentLoaded", () => {
   const form = document.querySelector(".order-form");
   if (!form) return;
 
+  // Sticker peel effect logic
+  const pointLight = document.querySelector("fePointLight");
+  const pointLightFlipped = document.getElementById("fePointLightFlipped");
+  const stickerContainer = document.querySelector(".sticker-container");
+  const draggable = document.querySelector(".draggable");
+  
+  if (pointLight && pointLightFlipped && stickerContainer && draggable) {
+    let isDragging = false;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+
+    function getContainingBlockOffset(element) {
+      let containingBlock = element.offsetParent || document.documentElement;
+      const containingBlockRect = containingBlock.getBoundingClientRect();
+      return {
+        left: containingBlockRect.left,
+        top: containingBlockRect.top,
+      };
+    }
+
+    function updateLightPosition(mouseX, mouseY) {
+      if (!stickerContainer) return;
+      const rect = stickerContainer.getBoundingClientRect();
+      const relativeX = mouseX - rect.left;
+      const relativeY = mouseY - rect.top;
+      pointLight.setAttribute("x", relativeX);
+      pointLight.setAttribute("y", relativeY);
+      pointLightFlipped.setAttribute("x", relativeX);
+      pointLightFlipped.setAttribute("y", rect.height - relativeY);
+    }
+
+    function startDrag(e) {
+      if (!draggable) return;
+      isDragging = true;
+      const rect = draggable.getBoundingClientRect();
+      const containingBlockOffset = getContainingBlockOffset(draggable);
+      dragOffsetX = e.clientX - rect.left;
+      dragOffsetY = e.clientY - rect.top;
+      // Convert to position:absolute friendly values
+      const parentRect = draggable.parentElement.getBoundingClientRect();
+      draggable.style.left = rect.left - parentRect.left + "px";
+      draggable.style.top = rect.top - parentRect.top + "px";
+    }
+
+    function updateDragPosition(e) {
+      if (isDragging && draggable) {
+        const parentRect = draggable.parentElement.getBoundingClientRect();
+        draggable.style.left =
+          e.clientX - dragOffsetX - parentRect.left + "px";
+        draggable.style.top =
+          e.clientY - dragOffsetY - parentRect.top + "px";
+      }
+    }
+
+    function stopDrag() {
+      isDragging = false;
+    }
+
+    draggable.addEventListener("mousedown", startDrag);
+    document.addEventListener("mouseup", stopDrag);
+    document.addEventListener("mousemove", (e) => {
+      updateLightPosition(e.clientX, e.clientY);
+      updateDragPosition(e);
+    });
+  }
+
   const qtyInput = form.querySelector(".order-qty-input");
   const decBtn = form.querySelectorAll(".order-qty-btn")[0];
   const incBtn = form.querySelectorAll(".order-qty-btn")[1];
@@ -142,85 +208,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (totalSummaryEl) totalSummaryEl.textContent = formatPrice(total);
   }
 
-  /**
-   * Setup the peel preview effect for a given preview container.
-   * When an image has been uploaded, order.js injects markup
-   * containing .transfer-stage, .plastic-cover, .plastic-flap and
-   * .transfer-artwork into the preview element.  This function
-   * attaches scroll and mousemove listeners to animate the peel,
-   * revealing the artwork as you scroll down the page and moving
-   * the specular highlight with the cursor.  It is safe to call
-   * multiple times; each call will bind new listeners scoped to
-   * this particular preview instance.
-   */
-  function setupPeelEffect(preview) {
-    const stage = preview && preview.querySelector(".transfer-stage");
-    if (!stage) return;
-    const cover = stage.querySelector(".plastic-cover");
-    const flap = stage.querySelector(".plastic-flap");
-    // Light sources are defined in order.html's <defs> block.
-    const pointLight = document.querySelector(
-      "filter#pointLight fePointLight"
-    );
-    const pointLightFlipped = document.getElementById(
-      "fePointLightFlipped"
-    );
-
-    function setPeel(progress) {
-      // clamp to [0,1]
-      const p = Math.max(0, Math.min(1, progress));
-      const coverBottom = 100 - p * 100;
-      const flapBottom = p * 100;
-      if (cover) {
-        cover.style.clipPath = `polygon(0 0, 100% 0, 100% ${coverBottom}%, 0 ${coverBottom}%)`;
-      }
-      if (flap) {
-        flap.style.clipPath = `polygon(0 0, 100% 0, 100% ${flapBottom}%, 0 ${flapBottom}%)`;
-        const liftPx = p * 70;
-        const tiltDeg = p * 70;
-        flap.style.transform = `translate(-50%, calc(-50% - ${liftPx}px)) rotateX(${tiltDeg}deg)`;
-      }
-    }
-
-    function updatePeelOnScroll() {
-      const rect = stage.getBoundingClientRect();
-      const winH = window.innerHeight || document.documentElement.clientHeight;
-      const start = winH * 0.2;
-      const end = winH * 0.8;
-      const mid = rect.top + rect.height / 2;
-      const raw = (mid - start) / (end - start);
-      setPeel(raw);
-    }
-
-    // Attach listeners
-    window.addEventListener("scroll", updatePeelOnScroll);
-    window.addEventListener("resize", updatePeelOnScroll);
-    // Initialize position
-    updatePeelOnScroll();
-
-    // Move the highlight with the cursor
-    stage.addEventListener("mousemove", (e) => {
-      const rect = stage.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      if (pointLight) {
-        pointLight.setAttribute("x", x);
-        pointLight.setAttribute("y", y);
-      }
-      if (pointLightFlipped) {
-        pointLightFlipped.setAttribute("x", x);
-        pointLightFlipped.setAttribute("y", rect.height - y);
-      }
-    });
-  }
-
   // Artwork preview in the upload area
   function applyPreviewSizing() {
     if (!previewEl) return;
-    // Prefer the peel preview's artwork if present, otherwise fall back to any img
-    const img =
-      previewEl.querySelector(".transfer-artwork") ||
-      previewEl.querySelector("img");
+    const img = previewEl.querySelector("img");
     if (!img) return;
 
     const label = (sizeSelect && sizeSelect.value) || '2" x 2"';
@@ -245,32 +236,33 @@ document.addEventListener("DOMContentLoaded", () => {
   if (uploadInput && previewEl) {
     uploadInput.addEventListener("change", () => {
       const file = uploadInput.files && uploadInput.files[0];
-      // Clear any existing preview content
-      previewEl.innerHTML = "";
-      previewEl.classList.remove("order-upload-preview--visible");
+      const img = document.getElementById("artwork-preview-image");
+      const stickerElements = previewEl.querySelector('.draggable');
 
-      if (!file) return;
+      if (!file) {
+        if(img) img.src = "";
+        previewEl.classList.remove("order-upload-preview--visible");
+        if(stickerElements) stickerElements.style.display = 'none';
+        // Clear summary on file removal
+        if(artSizeEl) artSizeEl.textContent = '–';
+        return;
+      }
+      
+      // Make sure sticker is visible if we have a file
+      if(stickerElements) stickerElements.style.display = 'block';
 
       if (file.type && file.type.startsWith("image/")) {
-        // Build peel preview markup
-        const wrapper = document.createElement("div");
-        wrapper.className = "transfer-demo";
-        wrapper.innerHTML = `
-          <div class="transfer-stage">
-            <img class="transfer-artwork" alt="${file.name}" />
-            <div class="plastic-cover">
-              <div class="plastic-sheen"></div>
-            </div>
-            <div class="plastic-flap">
-              <div class="plastic-sheen"></div>
-            </div>
-          </div>
-        `;
-        const artImg = wrapper.querySelector(".transfer-artwork");
-        artImg.src = URL.createObjectURL(file);
-        artImg.onload = () => {
+        if (!img) return;
+        
+        // Remove fallback if it exists
+        const fallback = previewEl.querySelector(".order-upload-preview-fallback");
+        if(fallback) fallback.remove();
+
+        img.alt = file.name;
+        img.src = URL.createObjectURL(file);
+        img.onload = () => {
           applyPreviewSizing();
-          // compute and display artwork size
+          // Actual artwork size calculation
           if (artSizeEl && sizeSelect) {
             const label = sizeSelect.value;
             const match =
@@ -278,10 +270,11 @@ document.addEventListener("DOMContentLoaded", () => {
             if (match) {
               const boxW = parseFloat(match[1]);
               const boxH = parseFloat(match[2]);
-              const naturalW = artImg.naturalWidth || 1;
-              const naturalH = artImg.naturalHeight || 1;
+              const naturalW = img.naturalWidth || 1;
+              const naturalH = img.naturalHeight || 1;
               const aspect = naturalW / naturalH;
               const boxAspect = boxW / boxH;
+
               let artW, artH;
               if (aspect >= boxAspect) {
                 artW = boxW;
@@ -297,20 +290,25 @@ document.addEventListener("DOMContentLoaded", () => {
               artSizeEl.textContent = label;
             }
           }
-          // Clean up object URL
-          URL.revokeObjectURL(artImg.src);
+          // Release memory once the image is loaded
+          URL.revokeObjectURL(img.src);
         };
-        previewEl.appendChild(wrapper);
-        previewEl.classList.add("order-upload-preview--visible");
-        // initialize peel effect for this preview
-        setupPeelEffect(previewEl);
       } else {
+        // Handle non-image file
+        if(img) img.src = '';
+        if(stickerElements) stickerElements.style.display = 'none';
+        if(artSizeEl) artSizeEl.textContent = '–';
+
+        const oldFallback = previewEl.querySelector(".order-upload-preview-fallback");
+        if(oldFallback) oldFallback.remove();
+
         const fallback = document.createElement("div");
         fallback.className = "order-upload-preview-fallback";
         fallback.textContent = file.name;
         previewEl.appendChild(fallback);
-        previewEl.classList.add("order-upload-preview--visible");
       }
+      
+      previewEl.classList.add("order-upload-preview--visible");
     });
 
     if (sizeSelect) {
