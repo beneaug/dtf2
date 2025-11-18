@@ -182,24 +182,50 @@ export function create(container) {
       
       const qtyInput = item.querySelector(".gang-auto-pack-qty");
       const packBtn = item.querySelector(".gang-auto-pack-btn");
-      const maxDisplay = item.querySelector(".gang-auto-pack-max");
+      let maxDisplay = item.querySelector(".gang-auto-pack-max");
       
       // Update max display when max changes (without recreating the entire list)
       const updateMaxDisplay = () => {
         const currentMax = maxInstancesMap.get(design.id) || 9999;
         qtyInput.max = currentMax;
+        
+        // Always re-query for maxDisplay to ensure we have the current DOM element
+        // This prevents issues if the DOM was rebuilt
+        maxDisplay = item.querySelector(".gang-auto-pack-max");
+        
         if (currentMax < 9999) {
           if (maxDisplay) {
+            // Update existing max display
             maxDisplay.textContent = `Max: ${currentMax}`;
           } else {
-            // Create max display if it doesn't exist
-            const newMaxDisplay = document.createElement("div");
-            newMaxDisplay.className = "gang-auto-pack-max";
-            newMaxDisplay.textContent = `Max: ${currentMax}`;
-            item.appendChild(newMaxDisplay);
+            // Only create if it truly doesn't exist (check for duplicates first)
+            const allMaxDisplays = item.querySelectorAll(".gang-auto-pack-max");
+            if (allMaxDisplays.length === 0) {
+              // Create max display if it doesn't exist
+              maxDisplay = document.createElement("div");
+              maxDisplay.className = "gang-auto-pack-max";
+              maxDisplay.textContent = `Max: ${currentMax}`;
+              // Insert after the controls div, not just append (to maintain order)
+              const controlsDiv = item.querySelector(".gang-auto-pack-controls");
+              if (controlsDiv && controlsDiv.nextSibling) {
+                item.insertBefore(maxDisplay, controlsDiv.nextSibling);
+              } else {
+                item.appendChild(maxDisplay);
+              }
+            } else {
+              // If duplicates exist, use the first one and remove the rest
+              maxDisplay = allMaxDisplays[0];
+              maxDisplay.textContent = `Max: ${currentMax}`;
+              for (let i = 1; i < allMaxDisplays.length; i++) {
+                allMaxDisplays[i].remove();
+              }
+            }
           }
-        } else if (maxDisplay) {
-          maxDisplay.remove();
+        } else {
+          // Remove all max displays if max is unlimited
+          const allMaxDisplays = item.querySelectorAll(".gang-auto-pack-max");
+          allMaxDisplays.forEach(display => display.remove());
+          maxDisplay = null;
         }
       };
       
