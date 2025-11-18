@@ -68,10 +68,13 @@ export function create(container) {
   let zoomLevel = initialZoom;
 
   let isDragging = false;
+  let isSelecting = false; // Multi-select box
   let dragStartX = 0;
   let dragStartY = 0;
   let dragInstanceId = null;
   let selectedInstanceId = null;
+  let selectionBox = null; // {x, y, width, height} for multi-select box
+  let dragSelectedInstances = new Set(); // Instances being dragged together
 
   // Image cache to avoid reloading images
   const imageCache = new Map();
@@ -316,7 +319,7 @@ export function create(container) {
       const centerX = boxTopLeftX + boxWidthPx / 2;
       const centerY = boxTopLeftY + boxHeightPx / 2;
 
-      const isSelected = instance.id === state.selectedInstanceId;
+      const isSelected = state.selectedInstanceIds.has(instance.id);
 
       // Draw bounding box and image together with rotation
       ctx.save();
@@ -426,24 +429,79 @@ export function create(container) {
     const mouseY = e.clientY - rect.top;
 
     const instance = getInstanceAtPoint(mouseX, mouseY);
+    const state = store.getState();
+    const isMultiSelect = e.ctrlKey || e.metaKey; // Ctrl/Cmd for multi-select
+    
     if (instance) {
-      isDragging = true;
-      dragStartX = mouseX;
-      dragStartY = mouseY;
-      dragInstanceId = instance.id;
-      
-      // Store the initial instance position when drag starts
-      const state = store.getState();
-      const inst = state.instances.find((i) => i.id === instance.id);
-      if (inst) {
-        dragStartInstanceX = inst.xIn;
-        dragStartInstanceY = inst.yIn;
+      if (isMultiSelect) {
+        // Multi-select mode: toggle selection
+        store.toggleInstanceSelection(instance.id);
+        // If this instance is selected, prepare to drag all selected
+        if (state.selectedInstanceIds.has(instance.id)) {
+          isDragging = true;
+          dragStartX = mouseX;
+          dragStartY = mouseY;
+          dragInstanceId = instance.id;
+          dragSelectedInstances = new Set(state.selectedInstanceIds);
+          
+          // Store initial positions for all selected instances
+          dragSelectedInstances.forEach(id => {
+            const inst = state.instances.find(i => i.id === id);
+            if (inst) {
+              inst._dragStartX = inst.xIn;
+              inst._dragStartY = inst.yIn;
+            }
+          });
+        }
+      } else {
+        // Single select mode
+        if (state.selectedInstanceIds.has(instance.id)) {
+          // Already selected, start dragging
+          isDragging = true;
+          dragStartX = mouseX;
+          dragStartY = mouseY;
+          dragInstanceId = instance.id;
+          dragSelectedInstances = new Set([instance.id]);
+          
+          const inst = state.instances.find((i) => i.id === instance.id);
+          if (inst) {
+            dragStartInstanceX = inst.xIn;
+            dragStartInstanceY = inst.yIn;
+          }
+        } else {
+          // Select this instance and start dragging
+          store.setSelectedInstance(instance.id);
+          isDragging = true;
+          dragStartX = mouseX;
+          dragStartY = mouseY;
+          dragInstanceId = instance.id;
+          dragSelectedInstances = new Set([instance.id]);
+          
+          const inst = state.instances.find((i) => i.id === instance.id);
+          if (inst) {
+            dragStartInstanceX = inst.xIn;
+            dragStartInstanceY = inst.yIn;
+          }
+        }
       }
-      
-      store.setSelectedInstance(instance.id);
       e.preventDefault(); // Prevent text selection
     } else {
-      store.setSelectedInstance(null);
+      // Clicked on empty space - start selection box
+      if (isMultiSelect) {
+        // In multi-select mode, don't clear selection, start selection box
+        isSelecting = true;
+        selectionBox = { x: mouseX, y: mouseY, width: 0, height: 0 };
+        dragStartX = mouseX;
+        dragStartY = mouseY;
+      } else {
+        // Clear selection and start selection box
+        store.clearSelection();
+        isSelecting = true;
+        selectionBox = { x: mouseX, y: mouseY, width: 0, height: 0 };
+        dragStartX = mouseX;
+        dragStartY = mouseY;
+      }
+      e.preventDefault();
     }
   });
 
@@ -451,117 +509,290 @@ export function create(container) {
   let dragStartInstanceY = 0;
 
   canvas.addEventListener("mousemove", (e) => {
-    if (!isDragging || !dragInstanceId) return;
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const ctx = canvas._renderContext;
+    if (!ctx) return;
+    const { offsetX, offsetY, scale } = ctx;
+    const state = store.getState();
+    const sheetSize = getSheetSize(state.selectedSheetSizeId);
+    const deadspaceIn = 0.157; // 4mm
 
+    // Handle selection box (multi-select)
+    if (isSelecting && selectionBox) {
+      selectionBox.width = mouseX - dragStartX;
+      selectionBox.height = mouseY - dragStartY;
+      render(); // Re-render to show selection box
+      return;
+    }
+
+    // Handle dragging instances
+    if (isDragging && dragSelectedInstances.size > 0) {
+      // Calculate mouse movement in canvas coordinates
+      const deltaX = (mouseX - dragStartX) / scale;
+      const deltaY = (mouseY - dragStartY) / scale;
+      const deltaXIn = convertPixelsToInches(deltaX);
+      const deltaYIn = convertPixelsToInches(deltaY);
+
+      // Try to move all selected instances
+      const updates = [];
+      const otherInstances = state.instances.filter(i => !dragSelectedInstances.has(i.id));
+
+      for (const instanceId of dragSelectedInstances) {
+        const instance = state.instances.find(i => i.id === instanceId);
+        if (!instance) continue;
+
+        // Get initial position from stored value or current position
+        const startX = instance._dragStartX !== undefined ? instance._dragStartX : instance.xIn;
+        const startY = instance._dragStartY !== undefined ? instance._dragStartY : instance.yIn;
+
+        let newX = startX + deltaXIn;
+        let newY = startY + deltaYIn;
+
+        // Apply snapping
+        if (state.snapIncrement > 0) {
+          newX = snapToGrid(newX, state.snapIncrement);
+          newY = snapToGrid(newY, state.snapIncrement);
+        }
+
+        // Calculate bounding box for this instance
+        const isRotated = instance.rotationDeg === 90;
+        let box;
+        if (isRotated) {
+          const graphicCenterX = newX + instance.widthIn / 2;
+          const graphicCenterY = newY + instance.heightIn / 2;
+          const boxWidth = instance.heightIn + (deadspaceIn * 2);
+          const boxHeight = instance.widthIn + (deadspaceIn * 2);
+          box = {
+            xIn: graphicCenterX - boxWidth / 2,
+            yIn: graphicCenterY - boxHeight / 2,
+            widthIn: boxWidth,
+            heightIn: boxHeight,
+          };
+        } else {
+          box = {
+            xIn: newX - deadspaceIn,
+            yIn: newY - deadspaceIn,
+            widthIn: instance.widthIn + (deadspaceIn * 2),
+            heightIn: instance.heightIn + (deadspaceIn * 2),
+          };
+        }
+
+        // Check bounds
+        if (!sheetSize || !isWithinBounds(box.xIn, box.yIn, box.widthIn, box.heightIn, sheetSize.widthIn, sheetSize.heightIn)) {
+          return; // Don't update if any instance would be out of bounds
+        }
+
+        // Check overlaps with other instances (not in selection)
+        let hasOverlap = false;
+        for (const other of otherInstances) {
+          const otherIsRotated = other.rotationDeg === 90;
+          let otherBox;
+          if (otherIsRotated) {
+            const otherCenterX = other.xIn + other.widthIn / 2;
+            const otherCenterY = other.yIn + other.heightIn / 2;
+            const otherBoxWidth = other.heightIn + (deadspaceIn * 2);
+            const otherBoxHeight = other.widthIn + (deadspaceIn * 2);
+            otherBox = {
+              xIn: otherCenterX - otherBoxWidth / 2,
+              yIn: otherCenterY - otherBoxHeight / 2,
+              widthIn: otherBoxWidth,
+              heightIn: otherBoxHeight,
+            };
+          } else {
+            otherBox = {
+              xIn: other.xIn - deadspaceIn,
+              yIn: other.yIn - deadspaceIn,
+              widthIn: other.widthIn + (deadspaceIn * 2),
+              heightIn: other.heightIn + (deadspaceIn * 2),
+            };
+          }
+
+          if (
+            box.xIn < otherBox.xIn + otherBox.widthIn &&
+            box.xIn + box.widthIn > otherBox.xIn &&
+            box.yIn < otherBox.yIn + otherBox.heightIn &&
+            box.yIn + box.heightIn > otherBox.yIn
+          ) {
+            hasOverlap = true;
+            break;
+          }
+        }
+
+        // Check overlaps with other instances in selection (that we've already processed)
+        if (!hasOverlap) {
+          for (const update of updates) {
+            const updateBox = update.box;
+            if (
+              box.xIn < updateBox.xIn + updateBox.widthIn &&
+              box.xIn + box.widthIn > updateBox.xIn &&
+              box.yIn < updateBox.yIn + updateBox.heightIn &&
+              box.yIn + box.heightIn > updateBox.yIn
+            ) {
+              hasOverlap = true;
+              break;
+            }
+          }
+        }
+
+        if (!hasOverlap) {
+          updates.push({
+            id: instanceId,
+            xIn: newX,
+            yIn: newY,
+            box: box,
+          });
+        }
+      }
+
+      // If all instances can be moved, update them all
+      if (updates.length === dragSelectedInstances.size) {
+        updates.forEach(update => {
+          store.updateInstance(update.id, { xIn: update.xIn, yIn: update.yIn });
+        });
+      }
+    }
+  });
+
+  canvas.addEventListener("mouseup", (e) => {
     const rect = canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
 
-    const ctx = canvas._renderContext;
-    if (!ctx) return;
-
-    const { offsetX, offsetY, scale } = ctx;
-    const state = store.getState();
-    const instance = state.instances.find((i) => i.id === dragInstanceId);
-    if (!instance) return;
-
-    // Calculate mouse movement in canvas coordinates
-    const deltaX = (mouseX - dragStartX) / scale;
-    const deltaY = (mouseY - dragStartY) / scale;
-
-    // Convert to inches and add to original position
-    let newX = dragStartInstanceX + convertPixelsToInches(deltaX);
-    let newY = dragStartInstanceY + convertPixelsToInches(deltaY);
-
-    // Apply snapping
-    if (state.snapIncrement > 0) {
-      newX = snapToGrid(newX, state.snapIncrement);
-      newY = snapToGrid(newY, state.snapIncrement);
-    }
-
-    // Check bounds and overlaps (account for deadspace and rotation)
-    const sheetSize = getSheetSize(state.selectedSheetSizeId);
-    if (sheetSize) {
-      const deadspaceIn = 0.157; // 4mm
-      const isRotated = instance.rotationDeg === 90;
-      
-      // Calculate bounding box for the new position
-      let box;
-      if (isRotated) {
-        const graphicCenterX = newX + instance.widthIn / 2;
-        const graphicCenterY = newY + instance.heightIn / 2;
-        const boxWidth = instance.heightIn + (deadspaceIn * 2);
-        const boxHeight = instance.widthIn + (deadspaceIn * 2);
-        box = {
-          xIn: graphicCenterX - boxWidth / 2,
-          yIn: graphicCenterY - boxHeight / 2,
-          widthIn: boxWidth,
-          heightIn: boxHeight,
-        };
-      } else {
-        box = {
-          xIn: newX - deadspaceIn,
-          yIn: newY - deadspaceIn,
-          widthIn: instance.widthIn + (deadspaceIn * 2),
-          heightIn: instance.heightIn + (deadspaceIn * 2),
-        };
-      }
-      
-      // Check if bounding box is within sheet bounds
-      if (!isWithinBounds(box.xIn, box.yIn, box.widthIn, box.heightIn, sheetSize.widthIn, sheetSize.heightIn)) {
-        return; // Don't update if out of bounds
-      }
-      
-      // Check if bounding box overlaps with other instances (excluding the one being dragged)
-      const otherInstances = state.instances.filter((i) => i.id !== dragInstanceId);
-      for (const other of otherInstances) {
-        const otherIsRotated = other.rotationDeg === 90;
-        let otherBox;
-        if (otherIsRotated) {
-          const otherCenterX = other.xIn + other.widthIn / 2;
-          const otherCenterY = other.yIn + other.heightIn / 2;
-          const otherBoxWidth = other.heightIn + (deadspaceIn * 2);
-          const otherBoxHeight = other.widthIn + (deadspaceIn * 2);
-          otherBox = {
-            xIn: otherCenterX - otherBoxWidth / 2,
-            yIn: otherCenterY - otherBoxHeight / 2,
-            widthIn: otherBoxWidth,
-            heightIn: otherBoxHeight,
-          };
-        } else {
-          otherBox = {
-            xIn: other.xIn - deadspaceIn,
-            yIn: other.yIn - deadspaceIn,
-            widthIn: other.widthIn + (deadspaceIn * 2),
-            heightIn: other.heightIn + (deadspaceIn * 2),
-          };
-        }
+    // Handle selection box completion
+    if (isSelecting && selectionBox) {
+      const ctx = canvas._renderContext;
+      if (ctx) {
+        const { offsetX, offsetY, scale } = ctx;
+        const state = store.getState();
         
-        // Check for overlap
-        if (
-          box.xIn < otherBox.xIn + otherBox.widthIn &&
-          box.xIn + box.widthIn > otherBox.xIn &&
-          box.yIn < otherBox.yIn + otherBox.heightIn &&
-          box.yIn + box.heightIn > otherBox.yIn
-        ) {
-          return; // Don't update if overlapping
+        // Convert selection box to inches
+        const boxLeft = Math.min(selectionBox.x, selectionBox.x + selectionBox.width);
+        const boxTop = Math.min(selectionBox.y, selectionBox.y + selectionBox.height);
+        const boxRight = Math.max(selectionBox.x, selectionBox.x + selectionBox.width);
+        const boxBottom = Math.max(selectionBox.y, selectionBox.y + selectionBox.height);
+        
+        const boxLeftIn = convertPixelsToInches((boxLeft - offsetX) / scale);
+        const boxTopIn = convertPixelsToInches((boxTop - offsetY) / scale);
+        const boxRightIn = convertPixelsToInches((boxRight - offsetX) / scale);
+        const boxBottomIn = convertPixelsToInches((boxBottom - offsetY) / scale);
+        
+        // Find all instances within selection box
+        const selectedIds = [];
+        state.instances.forEach(instance => {
+          const deadspaceIn = 0.157;
+          const isRotated = instance.rotationDeg === 90;
+          
+          let box;
+          if (isRotated) {
+            const graphicCenterX = instance.xIn + instance.widthIn / 2;
+            const graphicCenterY = instance.yIn + instance.heightIn / 2;
+            const boxWidth = instance.heightIn + (deadspaceIn * 2);
+            const boxHeight = instance.widthIn + (deadspaceIn * 2);
+            box = {
+              xIn: graphicCenterX - boxWidth / 2,
+              yIn: graphicCenterY - boxHeight / 2,
+              widthIn: boxWidth,
+              heightIn: boxHeight,
+            };
+          } else {
+            box = {
+              xIn: instance.xIn - deadspaceIn,
+              yIn: instance.yIn - deadspaceIn,
+              widthIn: instance.widthIn + (deadspaceIn * 2),
+              heightIn: instance.heightIn + (deadspaceIn * 2),
+            };
+          }
+          
+          // Check if instance center or any corner is within selection box
+          const centerX = box.xIn + box.widthIn / 2;
+          const centerY = box.yIn + box.heightIn / 2;
+          
+          if (centerX >= boxLeftIn && centerX <= boxRightIn &&
+              centerY >= boxTopIn && centerY <= boxBottomIn) {
+            selectedIds.push(instance.id);
+          }
+        });
+        
+        if (selectedIds.length > 0) {
+          if (e.ctrlKey || e.metaKey) {
+            // Add to existing selection
+            selectedIds.forEach(id => store.addInstanceToSelection(id));
+          } else {
+            // Replace selection
+            store.setSelectedInstances(selectedIds);
+          }
+        } else if (!(e.ctrlKey || e.metaKey)) {
+          // Clear selection if clicking empty space without modifier
+          store.clearSelection();
         }
       }
       
-      // Position is valid - update it
-      store.updateInstance(dragInstanceId, { xIn: newX, yIn: newY });
+      isSelecting = false;
+      selectionBox = null;
+      render(); // Re-render to hide selection box
     }
-  });
 
-  canvas.addEventListener("mouseup", () => {
+    // Clean up drag state
+    if (isDragging) {
+      // Clear stored drag positions
+      dragSelectedInstances.forEach(id => {
+        const instance = state.instances.find(i => i.id === id);
+        if (instance) {
+          delete instance._dragStartX;
+          delete instance._dragStartY;
+        }
+      });
+    }
+    
     isDragging = false;
     dragInstanceId = null;
+    dragSelectedInstances = new Set();
   });
 
   canvas.addEventListener("mouseleave", () => {
     isDragging = false;
+    isSelecting = false;
     dragInstanceId = null;
+    selectionBox = null;
+    dragSelectedInstances = new Set();
   });
+
+  // Keyboard shortcuts for rotation and deletion
+  // Use a scoped handler that only works when overlay is active
+  function handleKeyboardShortcuts(e) {
+    // Check if overlay is visible
+    const overlay = container.closest(".gang-builder-overlay");
+    if (!overlay || overlay.style.display === "none") {
+      return;
+    }
+    
+    // Don't handle if user is typing in an input
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable) {
+      return;
+    }
+    
+    const state = store.getState();
+    if (state.selectedInstanceIds.size === 0) return;
+    
+    // R key to rotate 90 degrees
+    if (e.key === "r" || e.key === "R") {
+      e.preventDefault();
+      store.rotateSelectedInstances(90);
+    }
+    
+    // Delete/Backspace to remove selected instances
+    if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault();
+      const selectedIds = Array.from(state.selectedInstanceIds);
+      if (selectedIds.length > 0) {
+        store.removeInstances(selectedIds);
+      }
+    }
+  }
+  
+  document.addEventListener("keydown", handleKeyboardShortcuts);
 
   // Zoom controls
   function updateZoomDisplay() {
