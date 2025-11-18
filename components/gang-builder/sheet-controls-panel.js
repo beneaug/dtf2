@@ -128,6 +128,8 @@ export function create(container) {
               naturalHeightPx: img.naturalHeight,
             };
             store.addDesignFile(designFile);
+            // Automatically place 1 instance of the design on the sheet
+            store.addInstancesForDesign(designFile.id, 1, true);
           };
           img.src = e.target.result;
         };
