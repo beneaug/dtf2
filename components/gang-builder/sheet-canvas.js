@@ -22,6 +22,14 @@ export function create(container) {
         </div>
       <div class="gang-canvas-container" id="gang-canvas-container">
         <canvas id="gang-canvas"></canvas>
+        <div class="gang-selection-toolbar" id="gang-selection-toolbar" style="display: none;">
+          <button class="gang-toolbar-btn" id="gang-rotate-btn" aria-label="Rotate 90°" title="Rotate 90° (R)">
+            ↻
+          </button>
+          <button class="gang-toolbar-btn" id="gang-delete-btn" aria-label="Delete" title="Delete (Del)">
+            🗑
+          </button>
+        </div>
       </div>
     </div>
   `;
@@ -34,6 +42,9 @@ export function create(container) {
   const zoomInBtn = container.querySelector("#gang-zoom-in");
   const zoomLevelDisplay = container.querySelector("#gang-zoom-level");
   const zoomControls = container.querySelector(".gang-zoom-controls");
+  const selectionToolbar = container.querySelector("#gang-selection-toolbar");
+  const rotateBtn = container.querySelector("#gang-rotate-btn");
+  const deleteBtn = container.querySelector("#gang-delete-btn");
   
   // Position zoom controls fixed relative to center panel
   function positionZoomControls() {
@@ -75,6 +86,8 @@ export function create(container) {
   let selectedInstanceId = null;
   let selectionBox = null; // {x, y, width, height} for multi-select box
   let dragSelectedInstances = new Set(); // Instances being dragged together
+  let hasMovedThreshold = false; // Track if mouse has moved enough to start dragging
+  const DRAG_THRESHOLD = 3; // Pixels - must move this much before dragging starts
 
   // Image cache to avoid reloading images
   const imageCache = new Map();
@@ -286,6 +299,21 @@ export function create(container) {
     ctx.textAlign = "center";
     ctx.fillText(sheetSize.label, canvasWidth / 2, offsetY - 10);
 
+    // Draw selection box if active
+    if (isSelecting && selectionBox) {
+      ctx.strokeStyle = "rgba(100, 150, 255, 0.8)";
+      ctx.fillStyle = "rgba(100, 150, 255, 0.1)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      const boxX = Math.min(selectionBox.x, selectionBox.x + selectionBox.width);
+      const boxY = Math.min(selectionBox.y, selectionBox.y + selectionBox.height);
+      const boxW = Math.abs(selectionBox.width);
+      const boxH = Math.abs(selectionBox.height);
+      ctx.fillRect(boxX, boxY, boxW, boxH);
+      ctx.strokeRect(boxX, boxY, boxW, boxH);
+      ctx.setLineDash([]);
+    }
+
     // Draw instances
     state.instances.forEach((instance) => {
       const design = state.designFiles.find((d) => d.id === instance.designId);
@@ -438,11 +466,11 @@ export function create(container) {
         store.toggleInstanceSelection(instance.id);
         // If this instance is selected, prepare to drag all selected
         if (state.selectedInstanceIds.has(instance.id)) {
-          isDragging = true;
           dragStartX = mouseX;
           dragStartY = mouseY;
           dragInstanceId = instance.id;
           dragSelectedInstances = new Set(state.selectedInstanceIds);
+          hasMovedThreshold = false;
           
           // Store initial positions for all selected instances
           dragSelectedInstances.forEach(id => {
@@ -456,31 +484,36 @@ export function create(container) {
       } else {
         // Single select mode
         if (state.selectedInstanceIds.has(instance.id)) {
-          // Already selected, start dragging
-          isDragging = true;
+          // Already selected, prepare for dragging (but don't start until threshold)
           dragStartX = mouseX;
           dragStartY = mouseY;
           dragInstanceId = instance.id;
-          dragSelectedInstances = new Set([instance.id]);
+          dragSelectedInstances = new Set(state.selectedInstanceIds); // Use all selected instances
+          hasMovedThreshold = false;
           
-          const inst = state.instances.find((i) => i.id === instance.id);
-          if (inst) {
-            dragStartInstanceX = inst.xIn;
-            dragStartInstanceY = inst.yIn;
-          }
+          // Store initial positions for all selected instances
+          dragSelectedInstances.forEach(id => {
+            const inst = state.instances.find(i => i.id === id);
+            if (inst) {
+              inst._dragStartX = inst.xIn;
+              inst._dragStartY = inst.yIn;
+            }
+          });
         } else {
-          // Select this instance and start dragging
+          // Select this instance and prepare for dragging
           store.setSelectedInstance(instance.id);
-          isDragging = true;
           dragStartX = mouseX;
           dragStartY = mouseY;
           dragInstanceId = instance.id;
           dragSelectedInstances = new Set([instance.id]);
+          hasMovedThreshold = false;
           
           const inst = state.instances.find((i) => i.id === instance.id);
           if (inst) {
             dragStartInstanceX = inst.xIn;
             dragStartInstanceY = inst.yIn;
+            inst._dragStartX = inst.xIn;
+            inst._dragStartY = inst.yIn;
           }
         }
       }
@@ -528,7 +561,21 @@ export function create(container) {
     }
 
     // Handle dragging instances
-    if (isDragging && dragSelectedInstances.size > 0) {
+    if (dragInstanceId && dragSelectedInstances.size > 0) {
+      // Check if we've moved enough to start dragging
+      const moveDistance = Math.sqrt(
+        Math.pow(mouseX - dragStartX, 2) + Math.pow(mouseY - dragStartY, 2)
+      );
+      
+      if (!hasMovedThreshold && moveDistance < DRAG_THRESHOLD) {
+        return; // Don't start dragging until threshold is met
+      }
+      
+      if (!hasMovedThreshold) {
+        hasMovedThreshold = true;
+        isDragging = true;
+      }
+      
       // Calculate mouse movement in canvas coordinates
       const deltaX = (mouseX - dragStartX) / scale;
       const deltaY = (mouseY - dragStartY) / scale;
@@ -735,7 +782,7 @@ export function create(container) {
     }
 
     // Clean up drag state
-    if (isDragging) {
+    if (isDragging || dragInstanceId) {
       // Clear stored drag positions
       dragSelectedInstances.forEach(id => {
         const instance = state.instances.find(i => i.id === id);
@@ -749,6 +796,7 @@ export function create(container) {
     isDragging = false;
     dragInstanceId = null;
     dragSelectedInstances = new Set();
+    hasMovedThreshold = false;
   });
 
   canvas.addEventListener("mouseleave", () => {
@@ -757,6 +805,7 @@ export function create(container) {
     dragInstanceId = null;
     selectionBox = null;
     dragSelectedInstances = new Set();
+    hasMovedThreshold = false;
   });
 
   // Keyboard shortcuts for rotation and deletion
@@ -793,6 +842,30 @@ export function create(container) {
   }
   
   document.addEventListener("keydown", handleKeyboardShortcuts);
+  
+  // Selection toolbar buttons
+  rotateBtn.addEventListener("click", () => {
+    const state = store.getState();
+    if (state.selectedInstanceIds.size > 0) {
+      store.rotateSelectedInstances(90);
+    }
+  });
+  
+  deleteBtn.addEventListener("click", () => {
+    const state = store.getState();
+    const selectedIds = Array.from(state.selectedInstanceIds);
+    if (selectedIds.length > 0) {
+      store.removeInstances(selectedIds);
+    }
+  });
+  
+  // Update selection toolbar visibility
+  store.subscribe((state) => {
+    const hasSelection = state.selectedInstanceIds && state.selectedInstanceIds.size > 0;
+    if (selectionToolbar) {
+      selectionToolbar.style.display = hasSelection ? "flex" : "none";
+    }
+  });
 
   // Zoom controls
   function updateZoomDisplay() {
