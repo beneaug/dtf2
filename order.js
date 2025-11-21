@@ -1,5 +1,3 @@
-import { StickerEffect } from './lib/sticker-effect.js';
-
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.querySelector(".order-form");
   if (!form) return;
@@ -20,9 +18,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const totalSummaryEl = form.querySelector(".order-summary-total");
   const artSizeEl = form.querySelector(".order-summary-art-size");
   const bannerEl = document.getElementById("order-banner");
-
-  // Sticker effect instance
-  let currentSticker = null;
   // Success / cancel message based on querystring
   if (bannerEl) {
     const params = new URLSearchParams(window.location.search);
@@ -74,7 +69,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
               }
               if (data.shippingAddress) {
-                console.log("Shipping address updated successfully");
+              console.log("Shipping address updated successfully");
               }
             } else {
               console.error("Failed to update order:", data.error);
@@ -201,10 +196,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // Artwork preview in the upload area
   function applyPreviewSizing() {
     if (!previewEl) return;
-    // Try to find img or use dataset
     const img = previewEl.querySelector("img");
-    const naturalW = img ? (img.naturalWidth || 1) : (parseFloat(previewEl.dataset.naturalWidth) || 120);
-    const naturalH = img ? (img.naturalHeight || 1) : (parseFloat(previewEl.dataset.naturalHeight) || 120);
+    if (!img) return;
 
     const label = (sizeSelect && sizeSelect.value) || '2" x 2"';
     // Map size labels to a base pixel dimension so sizes feel 1:1 relative.
@@ -216,138 +209,69 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     const baseSide = baseSideMap[label] || 120;
 
+    const naturalW = img.naturalWidth || baseSide;
+    const naturalH = img.naturalHeight || baseSide;
     const maxSide = Math.max(naturalW, naturalH);
     const scale = baseSide / maxSide;
 
-    const finalW = naturalW * scale;
-    const finalH = naturalH * scale;
-
-    if (img) {
-      img.style.width = `${finalW}px`;
-      img.style.height = `${finalH}px`;
-    } else if (currentSticker) {
-      // Resize the container itself, sticker will fill it
-      previewEl.style.width = `${finalW + 40}px`; // + padding
-      previewEl.style.height = `${finalH + 40}px`;
-      previewEl.style.flex = 'none'; // Allow explicit sizing
-      currentSticker.onResize();
-    }
-  }
-
-  function setupStickerInteractions() {
-    if (!currentSticker || !previewEl) return;
-
-    // Click to peel
-    previewEl.style.cursor = 'pointer';
-    previewEl.onclick = () => {
-       const target = currentSticker.targetCurl > 0.1 ? 0 : 1;
-       currentSticker.setCurl(target);
-    };
-
-    // Hover state
-    previewEl.onmouseenter = () => { if (currentSticker) currentSticker.isHovered = true; };
-    previewEl.onmouseleave = () => { if (currentSticker) currentSticker.isHovered = false; };
-
-    // Scroll to peel
-    const onScroll = () => {
-        if (!currentSticker || !previewEl) return;
-        const rect = previewEl.getBoundingClientRect();
-        const viewH = window.innerHeight;
-        // Curl as it leaves the view (scrolling down)
-        // Center of view = 0 curl. Top of view = 1 curl?
-        // Or: Scroll down -> it peels off.
-        
-        // Let's say: visible range 0.2 (top) to 0.8 (bottom) of viewport
-        // If it's near top, curl increases.
-        
-        const center = rect.top + rect.height / 2;
-        const progress = 1.0 - (center / viewH); 
-        // If center is at bottom (viewH), progress = 0.
-        // If center is at top (0), progress = 1.
-        
-        // Map to nice curve
-        let curl = (progress - 0.5) * 2.0; // 0 at center, 1 at top
-        curl = Math.max(0, Math.min(1, curl));
-        
-        // Only apply if not manually interacted? 
-        // Or let scroll override.
-        // Let's blend or just set.
-        if (!currentSticker.isHovered) {
-             currentSticker.setCurl(curl);
-        }
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    // Initial call
-    onScroll();
+    img.style.width = `${naturalW * scale}px`;
+    img.style.height = `${naturalH * scale}px`;
   }
 
   if (uploadInput && previewEl) {
     uploadInput.addEventListener("change", () => {
       const file = uploadInput.files && uploadInput.files[0];
-      
-      // Cleanup
-      if (currentSticker) {
-          // currentSticker.dispose(); // TODO: Implement dispose in StickerEffect
-          currentSticker = null;
-      }
       previewEl.innerHTML = "";
       previewEl.classList.remove("order-upload-preview--visible");
-      previewEl.style.width = '';
-      previewEl.style.height = '';
-      previewEl.style.flex = '';
 
       if (!file) return;
 
       if (file.type && file.type.startsWith("image/")) {
-        const url = URL.createObjectURL(file);
-        const img = new Image();
+        const img = document.createElement("img");
+        img.alt = file.name;
+        img.src = URL.createObjectURL(file);
         img.onload = () => {
-             previewEl.classList.add("order-upload-preview--visible");
-             
-             // Store dims
-             previewEl.dataset.naturalWidth = img.naturalWidth;
-             previewEl.dataset.naturalHeight = img.naturalHeight;
-             
-             // Init Sticker
-             currentSticker = new StickerEffect(previewEl, url);
-             
-             applyPreviewSizing();
+          applyPreviewSizing();
+          // Actual artwork size calculation
+          if (artSizeEl && sizeSelect) {
+            const label = sizeSelect.value;
+            const match =
+              label && label.match(/(\d+(?:\.\d+)?)"\s*x\s*(\d+(?:\.\d+)?)/);
+            if (match) {
+              const boxW = parseFloat(match[1]);
+              const boxH = parseFloat(match[2]);
+              const naturalW = img.naturalWidth || 1;
+              const naturalH = img.naturalHeight || 1;
+              const aspect = naturalW / naturalH;
+              const boxAspect = boxW / boxH;
 
-             // Art size calc logic
-             if (artSizeEl && sizeSelect) {
-                const label = sizeSelect.value;
-                const match =
-                  label && label.match(/(\d+(?:\.\d+)?)"\s*x\s*(\d+(?:\.\d+)?)/);
-                if (match) {
-                  const boxW = parseFloat(match[1]);
-                  const boxH = parseFloat(match[2]);
-                  const aspect = img.naturalWidth / img.naturalHeight;
-                  const boxAspect = boxW / boxH;
-                  let artW, artH;
-                  if (aspect >= boxAspect) {
-                    artW = boxW;
-                    artH = boxW / aspect;
-                  } else {
-                    artH = boxH;
-                    artW = boxH * aspect;
-                  }
-                  artSizeEl.textContent = `${artW.toFixed(2)}" × ${artH.toFixed(2)}"`;
-                } else {
-                  artSizeEl.textContent = label;
-                }
-             }
-             
-             setupStickerInteractions();
-             // URL.revokeObjectURL(url); // Keep it for sticker texture
+              let artW, artH;
+              if (aspect >= boxAspect) {
+                artW = boxW;
+                artH = boxW / aspect;
+              } else {
+                artH = boxH;
+                artW = boxH * aspect;
+              }
+              artSizeEl.textContent = `${artW.toFixed(2)}" × ${artH.toFixed(
+                2
+              )}"`;
+            } else {
+              artSizeEl.textContent = label;
+            }
+          }
+          // Release memory once the image is loaded
+          URL.revokeObjectURL(img.src);
         };
-        img.src = url;
+        previewEl.appendChild(img);
       } else {
         const fallback = document.createElement("div");
         fallback.className = "order-upload-preview-fallback";
         fallback.textContent = file.name;
         previewEl.appendChild(fallback);
-        previewEl.classList.add("order-upload-preview--visible");
       }
+
+      previewEl.classList.add("order-upload-preview--visible");
     });
 
     if (sizeSelect) {
@@ -356,29 +280,6 @@ document.addEventListener("DOMContentLoaded", () => {
         updatePricingDisplay();
       });
     }
-  }
-
-  if (garmentColorSelect) {
-    garmentColorSelect.addEventListener('change', () => {
-      if (!previewEl) return;
-      const val = garmentColorSelect.value;
-      let color = 'rgba(5, 6, 8, 0.9)'; // Default dark
-      if (val.includes('Light') || val.includes('white')) {
-        color = '#f0f0f0';
-      } else if (val.includes('Mid-tone')) {
-        color = '#808080';
-      } else if (val.includes('Dark') || val.includes('black')) {
-        color = '#1a1a1a';
-      }
-      previewEl.style.backgroundColor = color;
-      
-      // Update text color for contrast
-      if (val.includes('Light') || val.includes('white')) {
-        previewEl.style.color = '#1a1a1a';
-      } else {
-        previewEl.style.color = '#d0d0d0';
-      }
-    });
   }
 
   if (sizeSelect) {

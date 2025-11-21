@@ -222,25 +222,25 @@ module.exports = (req, res) => {
           // Create new order - gang sheet data will be added later via success page
           console.log("Creating new order in webhook");
           result = await client.query(
-            `INSERT INTO dtf_orders
+          `INSERT INTO dtf_orders
              (mode, size, quantity, transfer_name, garment_color, notes,
               files, unit_price_cents, total_price_cents, stripe_session_id, status, shipping_address)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11)
            RETURNING id, shipping_address, gang_sheet_data`,
-            [
+          [
               mode,
-              size,
-              quantity,
-              transferName,
-              garmentColor,
-              notes,
-              JSON.stringify(files),
-              unitPriceCents,
-              totalPriceCents,
-              session.id,
-              finalShippingAddressJson,
-            ]
-          );
+            size,
+            quantity,
+            transferName,
+            garmentColor,
+            notes,
+            JSON.stringify(files),
+            unitPriceCents,
+            totalPriceCents,
+            session.id,
+            finalShippingAddressJson,
+          ]
+        );
         }
 
         if (result && result.rowCount > 0) {
