@@ -1086,7 +1086,7 @@ export function create(container) {
     // Actually, user said "ensure we maintain compatibility".
     
     // Let's implement a simple removeInstances in store.js first to be clean.
-    store.removeInstances(state.selectedInstanceIds);
+    store.deleteInstances(state.selectedInstanceIds);
   }
 
   deleteBtn.addEventListener("click", deleteSelected);
