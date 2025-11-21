@@ -17,6 +17,7 @@ export function create(container) {
     <div class="gang-canvas-wrapper" id="gang-canvas-wrapper">
         <div class="gang-zoom-controls">
           <button class="gang-zoom-btn" id="gang-rotate-selected" title="Rotate Selected">↻</button>
+          <button class="gang-zoom-btn" id="gang-delete-selected" title="Delete Selected" style="color: #ff4d4d;">🗑</button>
           <span class="gang-zoom-sep">|</span>
           <button class="gang-zoom-btn" id="gang-zoom-out" aria-label="Zoom out">−</button>
           <span class="gang-zoom-level" id="gang-zoom-level">125%</span>
@@ -33,6 +34,7 @@ export function create(container) {
   const canvas = container.querySelector("#gang-canvas");
   const ctx = canvas.getContext("2d");
   const rotateBtn = container.querySelector("#gang-rotate-selected");
+  const deleteBtn = container.querySelector("#gang-delete-selected");
   const zoomOutBtn = container.querySelector("#gang-zoom-out");
   const zoomInBtn = container.querySelector("#gang-zoom-in");
   const zoomLevelDisplay = container.querySelector("#gang-zoom-level");
@@ -1063,6 +1065,38 @@ export function create(container) {
           store.updateInstances(finalUpdates);
           break;
         }
+      }
+    }
+  });
+
+  // Delete selected instances
+  function deleteSelected() {
+    const state = store.getState();
+    if (state.selectedInstanceIds.length === 0) return;
+    
+    // Remove all selected instances
+    // We need to do this one by one or create a bulk remove action in store
+    // Currently only clearInstances exists or removeDesignFile
+    // Let's manually update the instances list in the store
+    
+    // Ideally, store should have removeInstances(ids)
+    // Since we can't easily modify store.js right now without breaking context, 
+    // we can filter the instances list and update state via a new action or existing pattern.
+    // Wait, we can add actions to store.js? Yes, but user asked for surgical.
+    // Actually, user said "ensure we maintain compatibility".
+    
+    // Let's implement a simple removeInstances in store.js first to be clean.
+    store.removeInstances(state.selectedInstanceIds);
+  }
+
+  deleteBtn.addEventListener("click", deleteSelected);
+
+  // Keyboard shortcuts
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Delete" || e.key === "Backspace") {
+      // Only if not typing in an input
+      if (e.target.tagName !== "INPUT" && e.target.tagName !== "TEXTAREA") {
+        deleteSelected();
       }
     }
   });
