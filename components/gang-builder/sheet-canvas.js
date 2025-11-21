@@ -79,6 +79,11 @@ export function create(container) {
   let selectionCurrentX = 0;
   let selectionCurrentY = 0;
   let initialInstancePositions = new Map(); // Store initial positions for group drag
+  let potentialDragInstance = null; // For drag threshold check
+  let potentialSelect = false; // For select threshold check
+  let mouseDownX = 0;
+  let mouseDownY = 0;
+  const DRAG_THRESHOLD = 5; // Pixels
 
   // Image cache to avoid reloading images
   const imageCache = new Map();
@@ -448,57 +453,79 @@ export function create(container) {
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
 
-    const instance = getInstanceAtPoint(mouseX, mouseY);
-    const state = store.getState();
+    mouseDownX = mouseX;
+    mouseDownY = mouseY;
 
+    const instance = getInstanceAtPoint(mouseX, mouseY);
+    
     if (instance) {
-      // Clicked on an instance
-      isDragging = true;
-      dragStartX = mouseX;
-      dragStartY = mouseY;
-      
-      const isSelected = state.selectedInstanceIds.includes(instance.id);
-      
-      if (e.shiftKey) {
-        // Toggle selection
-        store.toggleInstanceSelection(instance.id);
-      } else {
-        if (!isSelected) {
-          // If clicking an unselected item without shift, select ONLY it
-          store.setSelectedInstance(instance.id);
-        }
-        // If already selected, keep selection (allows group drag)
-      }
-      
-      // Capture initial positions for ALL selected instances (including the one just selected)
-      // We need to fetch state again because selection might have changed
-      const freshState = store.getState();
-      initialInstancePositions.clear();
-      freshState.selectedInstanceIds.forEach(id => {
-        const inst = freshState.instances.find(i => i.id === id);
-        if (inst) {
-          initialInstancePositions.set(id, { xIn: inst.xIn, yIn: inst.yIn });
-        }
-      });
-      
+      // Potential drag start
+      potentialDragInstance = instance;
       e.preventDefault(); // Prevent text selection
     } else {
-      // Clicked on empty space - Start Marquee
-      store.setSelectedInstance(null); // Clear selection
-      isSelecting = true;
-      selectionStartX = mouseX;
-      selectionStartY = mouseY;
-      selectionCurrentX = mouseX;
-      selectionCurrentY = mouseY;
+      // Potential selection start
+      potentialSelect = true;
     }
-    
-    render(); // Re-render to show selection updates
   });
 
   canvas.addEventListener("mousemove", (e) => {
     const rect = canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
+
+    // Handle threshold check
+    if (potentialDragInstance && !isDragging) {
+      const dist = Math.sqrt(Math.pow(mouseX - mouseDownX, 2) + Math.pow(mouseY - mouseDownY, 2));
+      if (dist > DRAG_THRESHOLD) {
+        // Start Dragging
+        isDragging = true;
+        dragStartX = mouseDownX; // Use original click pos to prevent jumping
+        dragStartY = mouseDownY;
+        
+        // Handle selection logic here (drag start)
+        const state = store.getState();
+        const isSelected = state.selectedInstanceIds.includes(potentialDragInstance.id);
+        
+        if (e.shiftKey) {
+          // Shift drag: toggle/add
+          if (!isSelected) {
+            store.toggleInstanceSelection(potentialDragInstance.id);
+          }
+        } else {
+          // Normal drag
+          if (!isSelected) {
+             // If dragging unselected, select ONLY it
+             store.setSelectedInstance(potentialDragInstance.id);
+          }
+          // If already selected, keep selection for group drag
+        }
+
+        // Capture initial positions
+        const freshState = store.getState();
+        initialInstancePositions.clear();
+        freshState.selectedInstanceIds.forEach(id => {
+          const inst = freshState.instances.find(i => i.id === id);
+          if (inst) {
+            initialInstancePositions.set(id, { xIn: inst.xIn, yIn: inst.yIn });
+          }
+        });
+        
+        potentialDragInstance = null;
+      }
+    } else if (potentialSelect && !isSelecting) {
+      const dist = Math.sqrt(Math.pow(mouseX - mouseDownX, 2) + Math.pow(mouseY - mouseDownY, 2));
+      if (dist > DRAG_THRESHOLD) {
+        // Start Selecting
+        isSelecting = true;
+        store.setSelectedInstance(null); // Clear selection
+        selectionStartX = mouseDownX;
+        selectionStartY = mouseDownY;
+        selectionCurrentX = mouseX;
+        selectionCurrentY = mouseY;
+        potentialSelect = false;
+        render();
+      }
+    }
 
     if (isDragging) {
       const ctx = canvas._renderContext;
@@ -624,7 +651,24 @@ export function create(container) {
     }
   });
 
-  canvas.addEventListener("mouseup", () => {
+  canvas.addEventListener("mouseup", (e) => {
+    // Handle Click Actions (if not dragged)
+    if (potentialDragInstance && !isDragging) {
+       const state = store.getState();
+       const isSelected = state.selectedInstanceIds.includes(potentialDragInstance.id);
+       if (e.shiftKey) {
+         store.toggleInstanceSelection(potentialDragInstance.id);
+       } else {
+         // Simple click: select only this one
+         store.setSelectedInstance(potentialDragInstance.id);
+       }
+       render();
+    } else if (potentialSelect && !isSelecting) {
+       // Clicked on empty space
+       store.setSelectedInstance(null);
+       render();
+    }
+
     if (isSelecting) {
       // Finalize marquee selection
       const state = store.getState();
@@ -684,6 +728,8 @@ export function create(container) {
 
     isDragging = false;
     isSelecting = false;
+    potentialDragInstance = null;
+    potentialSelect = false;
     initialInstancePositions.clear();
     render();
   });
@@ -691,6 +737,8 @@ export function create(container) {
   canvas.addEventListener("mouseleave", () => {
     isDragging = false;
     isSelecting = false;
+    potentialDragInstance = null;
+    potentialSelect = false;
     initialInstancePositions.clear();
     render();
   });
@@ -890,8 +938,132 @@ export function create(container) {
       const finalUpdates = updates.map(u => ({ id: u.id, changes: u.changes }));
       store.updateInstances(finalUpdates);
     } else {
-      // Visual feedback for invalid rotation?
-      // For now just don't rotate.
+      // If rotation invalid, try nudging in a small radius
+      const radiusIn = 1.0; // 1 inch radius search
+      const stepIn = 0.1;   // 0.1 inch steps
+      let foundNudge = false;
+      let bestNudgeX = 0;
+      let bestNudgeY = 0;
+
+      // Spiral search pattern
+      // Simple grid search for now around -radius to +radius
+      const steps = Math.ceil(radiusIn / stepIn);
+      
+      // Sort search by distance from center to find closest valid position
+      const searchPoints = [];
+      for (let x = -steps; x <= steps; x++) {
+        for (let y = -steps; y <= steps; y++) {
+          if (x === 0 && y === 0) continue; // Already checked center
+          searchPoints.push({ x: x * stepIn, y: y * stepIn, dist: x*x + y*y });
+        }
+      }
+      searchPoints.sort((a, b) => a.dist - b.dist);
+
+      for (const point of searchPoints) {
+        const nudgeX = point.x;
+        const nudgeY = point.y;
+        
+        // Check if this nudge works for ALL selected instances
+        let nudgeValid = true;
+        const nudgeUpdates = [];
+
+        // Check bounds and collisions with unselected
+        for (const id of state.selectedInstanceIds) {
+           const update = updates.find(u => u.id === id);
+           if (!update) continue;
+           
+           // Get base rotated box from previous calculation
+           const baseBox = update.proposedBox;
+           
+           // Apply nudge
+           const nudgedBox = {
+             xIn: baseBox.xIn + nudgeX,
+             yIn: baseBox.yIn + nudgeY,
+             widthIn: baseBox.widthIn,
+             heightIn: baseBox.heightIn
+           };
+
+           // Check bounds
+           if (!isWithinBounds(nudgedBox.xIn, nudgedBox.yIn, nudgedBox.widthIn, nudgedBox.heightIn, sheetSize.widthIn, sheetSize.heightIn)) {
+             nudgeValid = false;
+             break;
+           }
+
+           // Check unselected
+           const unselectedInstances = state.instances.filter(i => !state.selectedInstanceIds.includes(i.id));
+           for (const other of unselectedInstances) {
+              // ... get other box ...
+              const deadspaceIn = 0.157;
+              const otherIsRotated = other.rotationDeg === 90;
+              let otherBox;
+              if (otherIsRotated) {
+                const otherCenterX = other.xIn + other.widthIn / 2;
+                const otherCenterY = other.yIn + other.heightIn / 2;
+                const otherBoxWidth = other.heightIn + (deadspaceIn * 2);
+                const otherBoxHeight = other.widthIn + (deadspaceIn * 2);
+                otherBox = {
+                  xIn: otherCenterX - otherBoxWidth / 2,
+                  yIn: otherCenterY - otherBoxHeight / 2,
+                  widthIn: otherBoxWidth,
+                  heightIn: otherBoxHeight
+                };
+              } else {
+                otherBox = {
+                  xIn: other.xIn - deadspaceIn,
+                  yIn: other.yIn - deadspaceIn,
+                  widthIn: other.widthIn + (deadspaceIn * 2),
+                  heightIn: other.heightIn + (deadspaceIn * 2)
+                };
+              }
+
+              if (
+                nudgedBox.xIn < otherBox.xIn + otherBox.widthIn &&
+                nudgedBox.xIn + nudgedBox.widthIn > otherBox.xIn &&
+                nudgedBox.yIn < otherBox.yIn + otherBox.heightIn &&
+                nudgedBox.yIn + nudgedBox.heightIn > otherBox.yIn
+              ) {
+                nudgeValid = false;
+                break;
+              }
+           }
+           if (!nudgeValid) break;
+           
+           // Save nudged box for self-collision check
+           nudgeUpdates.push({
+             id,
+             changes: { rotationDeg: update.changes.rotationDeg, xIn: state.instances.find(i => i.id === id).xIn + nudgeX, yIn: state.instances.find(i => i.id === id).yIn + nudgeY },
+             proposedBox: nudgedBox
+           });
+        }
+
+        // Check self-collisions
+        if (nudgeValid && nudgeUpdates.length > 1) {
+           for (let i = 0; i < nudgeUpdates.length; i++) {
+             for (let j = i + 1; j < nudgeUpdates.length; j++) {
+               const box1 = nudgeUpdates[i].proposedBox;
+               const box2 = nudgeUpdates[j].proposedBox;
+               if (
+                  box1.xIn < box2.xIn + box2.widthIn &&
+                  box1.xIn + box1.widthIn > box2.xIn &&
+                  box1.yIn < box2.yIn + box2.heightIn &&
+                  box1.yIn + box1.heightIn > box2.yIn
+                ) {
+                  nudgeValid = false;
+                  break;
+                }
+             }
+             if (!nudgeValid) break;
+           }
+        }
+
+        if (nudgeValid) {
+          foundNudge = true;
+          // Apply these updates!
+          const finalUpdates = nudgeUpdates.map(u => ({ id: u.id, changes: u.changes }));
+          store.updateInstances(finalUpdates);
+          break;
+        }
+      }
     }
   });
 
